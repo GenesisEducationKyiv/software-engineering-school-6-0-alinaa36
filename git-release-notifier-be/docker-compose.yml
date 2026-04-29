@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.prod 
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    restart: on-failure
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5449:5432" 
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=github_notifier
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  db-test:
+    image: postgres:15-alpine
+    ports:
+      - "5450:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=github_notifier_test
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+
+volumes:
+  postgres_data:

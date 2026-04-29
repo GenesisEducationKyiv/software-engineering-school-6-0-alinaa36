@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Subscription {
+  id                String   @id @default(uuid())
+  email             String
+  repository        String
+  lastSeenTag       String?
+  status            String   @default("PENDING") 
+  confirmToken      String   @unique @default(uuid()) 
+  unsubscribeToken  String   @unique @default(uuid())
+  createdAt         DateTime @default(now())
+
+  @@unique([email, repository]) 
+}
