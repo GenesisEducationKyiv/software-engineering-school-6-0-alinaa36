@@ -11,6 +11,7 @@ declare module 'fastify' {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export const diPlugin = fp(async (fastify: FastifyInstance) => {
   // 1. СТВОРЮЄМО GITHUB SERVICE ТУТ
   const githubService = new GithubService();

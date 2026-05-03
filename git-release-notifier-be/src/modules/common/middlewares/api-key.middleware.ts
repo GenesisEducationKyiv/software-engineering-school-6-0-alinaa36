@@ -3,6 +3,7 @@ import { AppError, UnauthorizedError } from '../../../lib/errors/app.error';
 import { Logger } from '../../../lib/logger/logger';
 import { config } from '../../../lib/config/env.config';
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export const verifyApiKey = async (request: FastifyRequest) => {
   const apiKey = request.headers['x-api-key'];
   const validKey = config.api.key;

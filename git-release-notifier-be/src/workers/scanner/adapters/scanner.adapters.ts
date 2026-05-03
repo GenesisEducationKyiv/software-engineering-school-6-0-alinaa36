@@ -5,21 +5,29 @@ import { ISourceProvider, INotifier, ISubscriptionRepository } from '../scanner.
 
 export class GithubReleaseAdapter implements ISourceProvider {
   constructor(private githubService: GithubService) {}
-  async getLatestReleasesBatch(repos: string[]) {
+  async getLatestReleasesBatch(repos: string[]): Promise<Record<string, string | null>> {
     const result = await this.githubService.getLatestReleasesBatch(repos);
     return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
   }
 }
 
 export class EmailNotifierAdapter implements INotifier {
-  async sendReleaseNotification(email: string, repo: string, tag: string, token: string) {
+  async sendReleaseNotification(
+    email: string,
+    repo: string,
+    tag: string,
+    token: string,
+  ): Promise<void> {
     await notifierService.sendReleaseNotification(email, repo, tag, token);
   }
 }
 
 export class PrismaSubscriptionAdapter implements ISubscriptionRepository {
-  async getOutdatedSubscribers(repoName: string, newTag: string) {
-    return prisma.subscription.findMany({
+  async getOutdatedSubscribers(
+    repoName: string,
+    newTag: string,
+  ): Promise<Array<{ id: string; email: string; unsubscribeToken: string }>> {
+    return await prisma.subscription.findMany({
       where: {
         repository: repoName,
         status: 'ACTIVE',
@@ -29,7 +37,7 @@ export class PrismaSubscriptionAdapter implements ISubscriptionRepository {
     });
   }
 
-  async updateTags(subscriberIds: string[], newTag: string) {
+  async updateTags(subscriberIds: string[], newTag: string): Promise<void> {
     await prisma.subscription.updateMany({
       where: { id: { in: subscriberIds } },
       data: { lastSeenTag: newTag },

@@ -27,11 +27,7 @@ export class SubscriptionService {
     }
 
     const subscription = await this.subscriptionRepository.upsertPending(email, repository);
-    await notifierService.sendConfirmationEmail(
-      email,
-      repository,
-      subscription.confirmToken as string,
-    );
+    await notifierService.sendConfirmationEmail(email, repository, subscription.confirmToken);
 
     return subscription;
   }

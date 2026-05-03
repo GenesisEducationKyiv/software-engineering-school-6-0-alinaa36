@@ -12,15 +12,17 @@ vi.mock('../../../lib/logger/logger', () => ({
 import { UnauthorizedError } from '../../../lib/errors/app.error';
 import { Logger } from '../../../lib/logger/logger';
 import { verifyApiKey } from '../middlewares/api-key.middleware';
+import { FastifyRequest } from 'fastify/types/request';
 
 // ---- helpers ----
 
 function makeRequest(apiKey?: string | string[]) {
   return {
-    headers: { 'x-api-key': apiKey },
-  } as any;
+    headers: {
+      'x-api-key': apiKey,
+    },
+  } as unknown as FastifyRequest; // ✅ Головна зміна тут
 }
-
 // ---- тести ----
 
 describe('verifyApiKey', () => {

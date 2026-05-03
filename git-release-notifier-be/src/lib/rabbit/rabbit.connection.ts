@@ -9,7 +9,9 @@ const RABBIT_URL = config.rabbit.url;
 let connection: ChannelModel | null = null;
 
 export async function getRabbitConnection(): Promise<ChannelModel> {
-  if (connection) return connection;
+  if (connection) {
+    return connection;
+  }
 
   connection = await amqp.connect(RABBIT_URL);
   Logger.info(' [RabbitMQ] Connection established.');

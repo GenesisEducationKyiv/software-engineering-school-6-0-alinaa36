@@ -13,7 +13,7 @@ import { ScanJobPayload } from './scanner.type';
 
 async function startWorker(): Promise<void> {
   const channel = await createChannel();
-  channel.prefetch(1);
+  await channel.prefetch(1);
 
   const processor = new ScanBatchProcessor({
     provider: new GithubReleaseAdapter(new GithubService()),
@@ -23,51 +23,55 @@ async function startWorker(): Promise<void> {
 
   Logger.info('[Worker] Started and ready for work...');
 
-  channel.consume(
+  void channel.consume(
     QUEUE_NAME,
-    async (msg) => {
-      if (!msg) return;
-
-      let payload: ScanJobPayload;
-
-      try {
-        payload = JSON.parse(msg.content.toString()) as ScanJobPayload;
-      } catch {
-        Logger.error('[Worker] Invalid message format. Discarding.');
-        channel.ack(msg);
-        return;
-      }
-
-      const { repos, lockKey } = payload;
-      Logger.info(`[Worker] Processing ${repos.length} repositories...`);
-
-      try {
-        await processor.process(repos);
-
-        channel.ack(msg);
-
-        if (lockKey) {
-          await redis.del(lockKey);
-          Logger.info(`[Redis] Lock ${lockKey} released.`);
+    (msg) => {
+      void (async () => {
+        if (!msg) {
+          return;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, WorkerConfig.RATE_LIMIT_DELAY_MS));
+        let payload: ScanJobPayload;
 
-        Logger.info('[Worker] Batch processed successfully.');
-      } catch (error) {
-        Logger.error({ err: error }, '[Worker] Processing error');
-
-        const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
-        const MAX_RETRIES = 3;
-
-        if (retryCount >= MAX_RETRIES) {
-          Logger.error('[Worker] Retry limit exceeded for batch. Sending to DLQ.');
-          channel.nack(msg, false, false);
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, WorkerConfig.NACK_RETRY_DELAY_MS));
-          channel.nack(msg, false, true);
+        try {
+          payload = JSON.parse(msg.content.toString()) as ScanJobPayload;
+        } catch {
+          Logger.error('[Worker] Invalid message format. Discarding.');
+          channel.ack(msg);
+          return;
         }
-      }
+
+        const { repos, lockKey } = payload;
+        Logger.info(`[Worker] Processing ${repos.length} repositories...`);
+
+        try {
+          await processor.process(repos);
+
+          channel.ack(msg);
+
+          if (lockKey) {
+            await redis.del(lockKey);
+            Logger.info(`[Redis] Lock ${lockKey} released.`);
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, WorkerConfig.RATE_LIMIT_DELAY_MS));
+
+          Logger.info('[Worker] Batch processed successfully.');
+        } catch (error) {
+          Logger.error({ err: error }, '[Worker] Processing error');
+
+          const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
+          const MAX_RETRIES = 3;
+
+          if (retryCount >= MAX_RETRIES) {
+            Logger.error('[Worker] Retry limit exceeded for batch. Sending to DLQ.');
+            channel.nack(msg, false, false);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, WorkerConfig.NACK_RETRY_DELAY_MS));
+            channel.nack(msg, false, true);
+          }
+        }
+      })();
     },
     { noAck: false },
   );

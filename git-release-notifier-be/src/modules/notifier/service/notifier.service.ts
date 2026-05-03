@@ -9,15 +9,17 @@ export class ScannerService {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
   start() {
-    this.cronTask = cron.schedule('* * * * *', async () => {
+    this.cronTask = cron.schedule('* * * * *', () => {
       Logger.info('[Cron] Starting job generation...');
-      await this.generateJobs();
+      void this.generateJobs().catch((error) => {
+        Logger.error({ err: error }, '[Cron] Failed to generate jobs');
+      });
     });
   }
 
   stop() {
     if (this.cronTask) {
-      this.cronTask.stop();
+      void this.cronTask.stop();
       Logger.info('[Cron] Scheduler stopped successfully.');
     }
   }
