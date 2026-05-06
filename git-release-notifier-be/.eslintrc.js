@@ -2,7 +2,7 @@ module.exports = {
   parser: "@typescript-eslint/parser",
   parserOptions: {
     project: "./tsconfig.eslint.json",
-    tsconfigRootDir: __dirname, // Тут __dirname працює ідеально
+    tsconfigRootDir: __dirname,
     sourceType: "module"
   },
   plugins: [
@@ -19,7 +19,8 @@ module.exports = {
     "eslint.config.mjs",
     ".eslintrc.js",
     "dist",
-    "node_modules"
+    "node_modules",
+    "**/*.js"
   ],
   rules: {
     "@typescript-eslint/interface-name-prefix": "off",

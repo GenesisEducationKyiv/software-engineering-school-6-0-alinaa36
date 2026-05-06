@@ -71,7 +71,20 @@ async function startWorker(): Promise<void> {
             channel.nack(msg, false, true);
           }
         }
-      })();
+      })().catch((err) => {
+        Logger.error({ err }, '[Worker] Unhandled critical error in message consumer');
+
+        if (msg) {
+          try {
+            channel.nack(msg, false, false);
+          } catch (nackErr) {
+            Logger.error(
+              { err: nackErr },
+              '[Worker] Failed to nack message during global fallback',
+            );
+          }
+        }
+      });
     },
     { noAck: false },
   );

@@ -1,8 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { httpRequestDurationMicroseconds } from '../../../lib/metrics/metrics';
 
-// eslint-disable-next-line @typescript-eslint/require-await
-export async function metricsMiddleware(fastify: FastifyInstance) {
+export function metricsMiddleware(fastify: FastifyInstance) {
   fastify.addHook('onResponse', async (request, reply) => {
     if (request.routeOptions.config.url) {
       httpRequestDurationMicroseconds
