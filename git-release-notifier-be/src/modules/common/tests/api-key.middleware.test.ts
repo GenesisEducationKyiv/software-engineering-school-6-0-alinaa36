@@ -23,6 +23,7 @@ function makeRequest(apiKey?: string | string[]) {
     },
   } as unknown as FastifyRequest;
 }
+
 // ---- тести ----
 
 describe('verifyApiKey', () => {
@@ -31,44 +32,41 @@ describe('verifyApiKey', () => {
   // --- успішна авторизація ---
 
   it('не кидає помилку якщо ключ коректний', async () => {
-    expect(() => verifyApiKey(makeRequest('valid-api-key'))).not.toThrow();
+    await expect(verifyApiKey(makeRequest('valid-api-key'))).resolves.not.toThrow();
   });
 
   // --- відсутній або неправильний ключ ---
 
   it('кидає UnauthorizedError якщо ключ не передано', async () => {
-    expect(() => verifyApiKey(makeRequest())).toThrow(UnauthorizedError);
+    await expect(verifyApiKey(makeRequest())).rejects.toThrow(UnauthorizedError);
   });
 
   it('кидає UnauthorizedError якщо ключ неправильний', async () => {
-    expect(() => verifyApiKey(makeRequest('wrong-key'))).toThrow(UnauthorizedError);
+    await expect(verifyApiKey(makeRequest('wrong-key'))).rejects.toThrow(UnauthorizedError);
   });
 
   it('кидає UnauthorizedError якщо передано порожній рядок', async () => {
-    expect(() => verifyApiKey(makeRequest(''))).toThrow(UnauthorizedError);
+    await expect(verifyApiKey(makeRequest(''))).rejects.toThrow(UnauthorizedError);
   });
 
   it('логує попередження при невдалій авторизації з ключем', async () => {
-    expect(() => verifyApiKey(makeRequest('wrong-key'))).toThrow(UnauthorizedError);
-
+    await verifyApiKey(makeRequest('wrong-key')).catch(() => {});
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('wrong-key'));
   });
 
-  it('логує "missing" якщо ключ не передано', () => {
-    expect(() => verifyApiKey(makeRequest())).toThrow(UnauthorizedError);
-
+  it('логує "missing" якщо ключ не передано', async () => {
+    await verifyApiKey(makeRequest()).catch(() => {});
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('missing'));
   });
 
   // --- масив ключів ---
 
   it('кидає UnauthorizedError якщо передано масив з неправильним ключем', async () => {
-    expect(() => verifyApiKey(makeRequest(['wrong-key']))).toThrow(UnauthorizedError);
+    await expect(verifyApiKey(makeRequest(['wrong-key']))).rejects.toThrow(UnauthorizedError);
   });
 
-  it('логує перший елемент масиву при невдалій авторизації', () => {
-    expect(() => verifyApiKey(makeRequest(['bad-key', 'other-key']))).toThrow(UnauthorizedError);
-
+  it('логує перший елемент масиву при невдалій авторизації', async () => {
+    await verifyApiKey(makeRequest(['bad-key', 'other-key'])).catch(() => {});
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('bad-key'));
   });
 });

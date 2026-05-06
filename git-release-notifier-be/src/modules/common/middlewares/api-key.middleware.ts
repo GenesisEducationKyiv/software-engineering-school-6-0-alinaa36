@@ -3,7 +3,7 @@ import { AppError, UnauthorizedError } from '../../../lib/errors/app.error';
 import { Logger } from '../../../lib/logger/logger';
 import { config } from '../../../lib/config/env.config';
 
-export const verifyApiKey = (request: FastifyRequest) => {
+export const verifyApiKey = async (request: FastifyRequest): Promise<void> => {
   const apiKey = request.headers['x-api-key'];
   const validKey = config.api.key;
 
@@ -14,9 +14,9 @@ export const verifyApiKey = (request: FastifyRequest) => {
 
   if (!apiKey || apiKey !== validKey) {
     const providedKey = Array.isArray(apiKey) ? apiKey[0] : apiKey;
-
     Logger.warn(`[Auth] Access denied. Provided key: ${providedKey || 'missing'}`);
-
     throw new UnauthorizedError('Invalid or missing x-api-key in headers');
   }
+
+  return Promise.resolve();
 };
