@@ -15,7 +15,8 @@
     "test:integration": "node src/scripts/test-integration.js",
     "test:integration:ci": "dotenv-cli -e .env.test --override -- vitest run --config vitest.integration.config.ts",
     "docker:test:up": "docker-compose up -d db-test",
-    "docker:test:down": "docker-compose stop db-test"
+    "docker:test:down": "docker-compose stop db-test",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
