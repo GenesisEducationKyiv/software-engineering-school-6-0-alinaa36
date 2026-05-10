@@ -31,9 +31,8 @@
 
 ### Constraints
 
-- **GitHub API rate limits:** to reduce the number of requests the scanner groups
-  repositories into batches and makes a single GraphQL request per batch,
-  responses are cached in Redis with a 10-minute TTL
+- **GitHub API rate limits:** the scanner groups repositories into batches
+  and makes a single GraphQL request per batch instead of one request per repository
 
 ---
 
@@ -87,7 +86,8 @@ graph TD
 
 **Responsibility:**
 Handles incoming user requests — subscription, confirmation, unsubscription, viewing subscriptions.
-Data validation and authentication via API key.
+Data validation on all endpoints. `GET /subscriptions` requires API key authentication;
+all other endpoints are publicly accessible.
 
 **Technology:**
 Fastify + TypeScript. gRPC as an alternative interface for the same operations.
@@ -170,8 +170,7 @@ sequenceDiagram
 
 ### Flow 2: Detecting and Sending a New Release
 
-The cron scanner regularly checks for new releases for active subscriptions
-and notifies subscribers if a new release has appeared.
+The cron scanner reads active subscriptions from the database and publishes repository batches to the queue. The worker picks up each batch, checks current releases via GitHub API and sends email notifications to subscribers for whom a new release has appeared.
 
 ```mermaid
 sequenceDiagram
@@ -179,15 +178,27 @@ sequenceDiagram
     Cron Scanner->>RabbitMQ: publish repository batches
     RabbitMQ->>Email Worker: deliver batch
     Email Worker->>GitHub API: check current releases
-    Email Worker->>PostgreSQL: update last_seen_tag
     Email Worker->>User: send email
+    Email Worker->>PostgreSQL: update last_seen_tag
 ```
 
 ---
 
 ## Infrastructure
 
-Local development is run via Docker Compose.
+Local development is run via Docker Compose. All services share a single Docker network
+and communicate via service names as hostnames.
+Environment variables are configured via `.env` file — see `.env.example` for the full list
+of required variables including `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URL`, `GITHUB_TOKEN` and SMTP credentials.
+
+To spin up the local environment:
+
+```bash
+docker compose up -d
+npm run prisma:migrate
+npm run start:dev
+```
+
 CI runs the linter and tests on every push via GitHub Actions.
 
 | Component | Technology | Environment |

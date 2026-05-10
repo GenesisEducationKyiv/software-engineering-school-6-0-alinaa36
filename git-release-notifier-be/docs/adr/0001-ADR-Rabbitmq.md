@@ -7,7 +7,6 @@
 3. [Decision](#decision)
 4. [Rejected Alternatives](#rejected-alternatives)
 5. [Consequences](#consequences)
-6. [References](#references)
 
 ---
 
@@ -60,7 +59,7 @@ allowing horizontal scaling of processing without any changes to the scanner log
 | Queue | `github-scanner-queue` | Single queue for batches from the scanner |
 | `durable` | `true` | Queue survives a RabbitMQ restart |
 | `persistent` | `true` | Messages are persisted to disk |
-
+| `prefetch` | `1` | Worker processes one message at a time before acknowledging — ensures fair distribution among workers and prevents memory overload |
 ---
 
 ## Rejected Alternatives
@@ -102,10 +101,12 @@ Not chosen because:
 ### Negative / Risks
 
 - If RabbitMQ goes down the queue becomes completely unavailable — health checks and alerts are required
+- Message ordering is not guaranteed with multiple workers (competing consumers)
+- No built-in deduplication — if a message is requeued and processed twice, duplicate emails can be sent
+- Debugging failed messages requires access to the RabbitMQ management UI or DLQ inspection
 
 ### Trade-offs / Neutral Changes
 
 - Three infrastructure dependencies instead of two
 - Local development requires `docker-compose up rabbitmq`
-- Switching to a different broker in the future only requires rewriting `rabbit.channel.ts`
-  and `rabbit.connection.ts`; the worker logic remains unchanged
+- Switching to a different broker requires rewriting the transport layer (`rabbit.channel.ts`, `rabbit.connection.ts`) as well as adapting producer and consumer behavior — publish, consume, ack/nack and retry logic
