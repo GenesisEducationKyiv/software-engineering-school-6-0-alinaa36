@@ -1,21 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../sender/services/mail.service', () => ({
-  notifierService: {
-    sendConfirmationEmail: vi.fn().mockResolvedValue(undefined),
-    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
 vi.mock('../../../lib/metrics/metrics', () => ({
   activeSubscriptionsGauge: { set: vi.fn() },
 }));
 
 import { SubscriptionService } from '../services/subscription.service';
-import { notifierService } from '../../sender/services/mail.service';
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { NotFoundError } from '../../../lib/errors/app.error';
 import { GithubService } from '../../github/services/github.service';
+import { NotifierService } from '../../sender/services/mail.service';
 
 // ---- helpers ----
 
@@ -39,16 +32,25 @@ function makeGithubService() {
   } as unknown as GithubService;
 }
 
+function makeNotifier() {
+  return {
+    sendConfirmationEmail: vi.fn().mockResolvedValue(undefined),
+    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
+  } as unknown as NotifierService;
+}
+
 describe('SubscriptionService', () => {
   let repository: ReturnType<typeof makeRepository>;
   let githubService: ReturnType<typeof makeGithubService>;
+  let notifier: ReturnType<typeof makeNotifier>;
   let service: SubscriptionService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     repository = makeRepository();
     githubService = makeGithubService();
-    service = new SubscriptionService(repository, githubService);
+    notifier = makeNotifier();
+    service = new SubscriptionService(repository, githubService, notifier);
   });
 
   describe('subscribeToRepo', () => {
@@ -81,7 +83,7 @@ describe('SubscriptionService', () => {
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
 
-      expect(notifierService.sendConfirmationEmail).toHaveBeenCalledWith(
+      expect(notifier.sendConfirmationEmail).toHaveBeenCalledWith(
         'user@example.com',
         'user/repo',
         'confirm-tok',
@@ -139,7 +141,7 @@ describe('SubscriptionService', () => {
     });
 
     it('оновлює gauge після активації', async () => {
-      repository.findByConfirmToken.mockResolvedValue({ id: '1' });
+      repository.findByConfirmToken.mockResolvedValue({ id: '1', status: 'PENDING' });
       repository.activate.mockResolvedValue({ id: '1', status: 'ACTIVE' });
       repository.countActive.mockResolvedValue(7);
 
@@ -150,7 +152,7 @@ describe('SubscriptionService', () => {
 
     it('повертає активовану підписку', async () => {
       const activated = { id: '1', status: 'ACTIVE' };
-      repository.findByConfirmToken.mockResolvedValue({ id: '1' });
+      repository.findByConfirmToken.mockResolvedValue({ id: '1', status: 'PENDING' });
       repository.activate.mockResolvedValue(activated);
       repository.countActive.mockResolvedValue(1);
 

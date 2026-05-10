@@ -1,26 +1,24 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { cronScheduler, scanJobQueue } from './adapters/notifier.adapters';
 import { ScannerService } from './service/notifier.service';
-import { Logger } from '../../lib/logger/logger';
 
 export default function NotifierModule(
   fastify: FastifyInstance,
-  opts: FastifyPluginOptions,
+  _opts: FastifyPluginOptions,
   done: () => void,
 ) {
-  const scannerService = new ScannerService(fastify.subscriptionService);
+  const scannerService = new ScannerService(
+    fastify.subscriptionService,
+    cronScheduler,
+    scanJobQueue,
+  );
 
-  fastify.addHook('onReady', (doneHook) => {
+  fastify.addHook('onReady', async () => {
     scannerService.start();
-    Logger.info('[NotifierModule] Cron scheduler started.');
-    doneHook();
   });
 
-  fastify.addHook('onClose', (instance, doneHook) => {
-    if (typeof scannerService.stop === 'function') {
-      scannerService.stop();
-      Logger.info('[NotifierModule] Cron scheduler gracefully stopped.');
-    }
-    doneHook();
+  fastify.addHook('onClose', async () => {
+    scannerService.stop();
   });
 
   done();

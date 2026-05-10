@@ -1,7 +1,13 @@
+import { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
+import { config } from '../../lib/config/env.config';
 import { GithubService } from '../../modules/github/services/github.service';
+import { GithubHttpClient } from '../../modules/github/client/github.client';
+import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
+import { GithubResponseParser } from '../../modules/github/query/github-response.parser';
+import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
 import { WorkerConfig } from '../config/worker.config';
 import {
   GithubReleaseAdapter,
@@ -11,12 +17,71 @@ import {
 import { ScanBatchProcessor } from './scanner.processor';
 import { ScanJobPayload } from './scanner.type';
 
+const MAX_RETRIES = 3;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function processMessage(
+  msg: ConsumeMessage,
+  processor: ScanBatchProcessor,
+  channel: Awaited<ReturnType<typeof createChannel>>,
+): Promise<void> {
+  let payload: ScanJobPayload;
+
+  try {
+    payload = JSON.parse(msg.content.toString()) as ScanJobPayload;
+  } catch {
+    Logger.error('[Worker] Invalid message format. Discarding.');
+    channel.ack(msg);
+    return;
+  }
+
+  const { repos, lockKey } = payload;
+  Logger.info(`[Worker] Processing ${repos.length} repositories...`);
+
+  try {
+    await processor.process(repos);
+
+    channel.ack(msg);
+
+    if (lockKey) {
+      await redis.del(lockKey);
+      Logger.info(`[Redis] Lock ${lockKey} released.`);
+    }
+
+    await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
+    Logger.info('[Worker] Batch processed successfully.');
+  } catch (error) {
+    Logger.error({ err: error }, '[Worker] Processing error');
+
+    const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
+
+    if (retryCount >= MAX_RETRIES) {
+      Logger.error('[Worker] Retry limit exceeded. Sending to DLQ.');
+      channel.nack(msg, false, false);
+    } else {
+      await delay(WorkerConfig.NACK_RETRY_DELAY_MS);
+      channel.nack(msg, false, true);
+    }
+  }
+}
+
 async function startWorker(): Promise<void> {
   const channel = await createChannel();
   await channel.prefetch(1);
 
+  const githubService = new GithubService(
+    new GithubHttpClient(() => ({
+      Authorization: `Bearer ${config.github.token}`,
+      'Content-Type': 'application/json',
+    })),
+    new RedisCacheRepository(),
+    new GithubQueryBuilder(),
+    new GithubResponseParser(),
+  );
+
   const processor = new ScanBatchProcessor({
-    provider: new GithubReleaseAdapter(new GithubService()),
+    provider: new GithubReleaseAdapter(githubService),
     notifier: new EmailNotifierAdapter(),
     repository: new PrismaSubscriptionAdapter(),
   });
@@ -26,63 +91,14 @@ async function startWorker(): Promise<void> {
   void channel.consume(
     QUEUE_NAME,
     (msg) => {
-      void (async () => {
-        if (!msg) {
-          return;
-        }
+      if (!msg) return;
 
-        let payload: ScanJobPayload;
-
-        try {
-          payload = JSON.parse(msg.content.toString()) as ScanJobPayload;
-        } catch {
-          Logger.error('[Worker] Invalid message format. Discarding.');
-          channel.ack(msg);
-          return;
-        }
-
-        const { repos, lockKey } = payload;
-        Logger.info(`[Worker] Processing ${repos.length} repositories...`);
-
-        try {
-          await processor.process(repos);
-
-          channel.ack(msg);
-
-          if (lockKey) {
-            await redis.del(lockKey);
-            Logger.info(`[Redis] Lock ${lockKey} released.`);
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, WorkerConfig.RATE_LIMIT_DELAY_MS));
-
-          Logger.info('[Worker] Batch processed successfully.');
-        } catch (error) {
-          Logger.error({ err: error }, '[Worker] Processing error');
-
-          const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
-          const MAX_RETRIES = 3;
-
-          if (retryCount >= MAX_RETRIES) {
-            Logger.error('[Worker] Retry limit exceeded for batch. Sending to DLQ.');
-            channel.nack(msg, false, false);
-          } else {
-            await new Promise((resolve) => setTimeout(resolve, WorkerConfig.NACK_RETRY_DELAY_MS));
-            channel.nack(msg, false, true);
-          }
-        }
-      })().catch((err) => {
+      void processMessage(msg, processor, channel).catch((err) => {
         Logger.error({ err }, '[Worker] Unhandled critical error in message consumer');
-
-        if (msg) {
-          try {
-            channel.nack(msg, false, false);
-          } catch (nackErr) {
-            Logger.error(
-              { err: nackErr },
-              '[Worker] Failed to nack message during global fallback',
-            );
-          }
+        try {
+          channel.nack(msg, false, false);
+        } catch (nackErr) {
+          Logger.error({ err: nackErr }, '[Worker] Failed to nack message during global fallback');
         }
       });
     },

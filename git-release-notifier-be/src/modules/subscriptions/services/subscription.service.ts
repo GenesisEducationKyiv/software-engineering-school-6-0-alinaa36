@@ -1,13 +1,14 @@
-import { SubscriptionRepository } from '../repositories/subscription.repository';
-import { notifierService } from '../../sender/services/mail.service';
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
+import { ISubscriptionRepository } from '../intarfaces/subscription-repository.interface';
 import { GithubService } from '../../github/services/github.service';
+import { NotifierService } from '../../sender/services/mail.service';
 
 export class SubscriptionService {
   constructor(
-    private subscriptionRepository: SubscriptionRepository,
-    private githubService: GithubService,
+    private readonly subscriptionRepository: ISubscriptionRepository,
+    private readonly githubService: GithubService,
+    private readonly notifier: NotifierService,
   ) {}
 
   async subscribeToRepo(email: string, repository: string) {
@@ -27,7 +28,7 @@ export class SubscriptionService {
     }
 
     const subscription = await this.subscriptionRepository.upsertPending(email, repository);
-    await notifierService.sendConfirmationEmail(email, repository, subscription.confirmToken);
+    await this.notifier.sendConfirmationEmail(email, repository, subscription.confirmToken);
 
     return subscription;
   }
@@ -44,9 +45,7 @@ export class SubscriptionService {
     }
 
     const updatedSubscription = await this.subscriptionRepository.activate(subscription.id);
-
-    const activeCount = await this.subscriptionRepository.countActive();
-    activeSubscriptionsGauge.set(activeCount);
+    await this.syncActiveGauge();
 
     return updatedSubscription;
   }
@@ -55,23 +54,25 @@ export class SubscriptionService {
     const subscription = await this.subscriptionRepository.findByUnsubscribeToken(token);
 
     if (!subscription) {
-      throw new NotFoundError('Недійсний токен підтвердження');
+      throw new NotFoundError('Недійсний токен відписки');
     }
 
     const deleted = await this.subscriptionRepository.delete(subscription.id);
-
-    const activeCount = await this.subscriptionRepository.countActive();
-
-    activeSubscriptionsGauge.set(activeCount);
+    await this.syncActiveGauge();
 
     return deleted;
   }
 
   async getSubscriptionsByEmail(email: string) {
-    return await this.subscriptionRepository.findByEmail(email);
+    return this.subscriptionRepository.findByEmail(email);
   }
 
   async groupByRepository() {
-    return await this.subscriptionRepository.groupByRepository();
+    return this.subscriptionRepository.groupByRepository();
+  }
+
+  private async syncActiveGauge(): Promise<void> {
+    const count = await this.subscriptionRepository.countActive();
+    activeSubscriptionsGauge.set(count);
   }
 }
