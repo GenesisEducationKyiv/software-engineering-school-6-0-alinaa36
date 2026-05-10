@@ -7,7 +7,9 @@ import { IGithubHttpClient } from '../client/github.client';
 import { ICacheRepository } from '../../common/cache/cache-repository.interface';
 import { GithubGraphQLResponse, GithubRepositoryNode } from '../types/github-info.type';
 
-// ---- helpers ----
+vi.mock('../../../lib/logger/logger', () => ({
+  Logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+}));
 
 function makeGraphQLResponse(
   repos: Array<{ nameWithOwner: string; tagName: string | null }>,
