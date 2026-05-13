@@ -28,12 +28,6 @@ export class GithubHttpClient implements IGithubHttpClient {
       throw new GithubError(`GraphQL API Error: ${response.statusText}`, response.status);
     }
 
-    const json = (await response.json()) as GithubGraphQLResponse;
-
-    if (json.errors?.length) {
-      throw new GithubError(`GraphQL Error: ${json.errors[0].message}`, 200);
-    }
-
-    return json;
+    return response.json() as Promise<GithubGraphQLResponse>;
   }
 }
