@@ -1,6 +1,9 @@
 import { Subscription } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { ISubscriptionRepository } from '../intarfaces/subscription-repository.interface';
+import {
+  ISubscriptionRepository,
+  RepositoryGroup,
+} from '../interfaces/subscription-repository.interface';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',
@@ -62,11 +65,16 @@ export class SubscriptionRepository implements ISubscriptionRepository {
     return prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE } });
   }
 
-  async groupByRepository() {
-    return await prisma.subscription.groupBy({
+  async groupByRepository(): Promise<RepositoryGroup[]> {
+    const rows = await prisma.subscription.groupBy({
       by: ['repository'],
       where: { status: SubscriptionStatus.ACTIVE },
       _count: { repository: true },
     });
+
+    return rows.map((row) => ({
+      repository: row.repository,
+      count: row._count.repository,
+    }));
   }
 }

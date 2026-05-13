@@ -1,8 +1,8 @@
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
-import { ISubscriptionRepository } from '../intarfaces/subscription-repository.interface';
 import { GithubService } from '../../github/services/github.service';
 import { NotifierService } from '../../sender/services/mail.service';
+import { ISubscriptionRepository } from '../interfaces/subscription-repository.interface';
 
 export class SubscriptionService {
   constructor(

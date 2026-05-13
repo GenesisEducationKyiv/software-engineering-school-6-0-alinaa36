@@ -1,18 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScannerService } from '../service/notifier.service';
-import * as cron from 'node-cron';
+import {
+  IScheduler,
+  IJobQueue,
+  IScheduledTask,
+  ISubscriptionServiceForScanner,
+} from '../interfaces/notifier.interfaces';
 
 vi.mock('../../../lib/logger/logger', () => ({
   Logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 
 import { Logger } from '../../../lib/logger/logger';
-import { IScheduler, IJobQueue } from '../interfaces/notifier.interfaces';
 
 // ---- helpers ----
 
-function makeSubscriptionService(repos: Array<{ repository: string }> = []) {
+function makeSubscriptionService(
+  repos: Array<{ repository: string }> = [],
+): ISubscriptionServiceForScanner {
   return {
     groupByRepository: vi.fn().mockResolvedValue(repos),
   };
@@ -23,7 +28,7 @@ function makeScheduler(): IScheduler & { getHandler: () => (() => Promise<void>)
   return {
     schedule: vi.fn((_, handler) => {
       capturedHandler = handler;
-      return { stop: vi.fn() } as unknown as cron.ScheduledTask;
+      return { stop: vi.fn(), start: vi.fn() } satisfies IScheduledTask;
     }),
     stop: vi.fn(),
     getHandler: () => capturedHandler,
@@ -42,7 +47,7 @@ function makeService(
   jobQueue = makeJobQueue(),
 ) {
   const sub = makeSubscriptionService(repos);
-  const service = new ScannerService(sub as any, scheduler, jobQueue);
+  const service = new ScannerService(sub, scheduler, jobQueue);
   return { service, sub, scheduler, jobQueue };
 }
 
@@ -132,9 +137,11 @@ describe('ScannerService', () => {
     });
 
     it('не пробрасовує помилку якщо groupByRepository кинув виняток', async () => {
-      const sub = { groupByRepository: vi.fn().mockRejectedValue(new Error('DB error')) };
+      const sub: ISubscriptionServiceForScanner = {
+        groupByRepository: vi.fn().mockRejectedValue(new Error('DB error')),
+      };
       const scheduler = makeScheduler();
-      const service = new ScannerService(sub as any, scheduler, makeJobQueue());
+      const service = new ScannerService(sub, scheduler, makeJobQueue());
       service.start();
 
       await expect(triggerCronCallback(scheduler)).resolves.not.toThrow();
@@ -142,9 +149,11 @@ describe('ScannerService', () => {
 
     it('логує помилку якщо groupByRepository кинув виняток', async () => {
       const error = new Error('DB error');
-      const sub = { groupByRepository: vi.fn().mockRejectedValue(error) };
+      const sub: ISubscriptionServiceForScanner = {
+        groupByRepository: vi.fn().mockRejectedValue(error),
+      };
       const scheduler = makeScheduler();
-      const service = new ScannerService(sub as any, scheduler, makeJobQueue());
+      const service = new ScannerService(sub, scheduler, makeJobQueue());
       service.start();
 
       await triggerCronCallback(scheduler);
@@ -161,7 +170,7 @@ describe('ScannerService', () => {
       };
       const scheduler = makeScheduler();
       const service = new ScannerService(
-        makeSubscriptionService([{ repository: 'user/repo' }]) as any,
+        makeSubscriptionService([{ repository: 'user/repo' }]),
         scheduler,
         jobQueue,
       );

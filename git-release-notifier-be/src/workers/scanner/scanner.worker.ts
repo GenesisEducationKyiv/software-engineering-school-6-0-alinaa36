@@ -2,7 +2,6 @@ import { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
-import { config } from '../../lib/config/env.config';
 import { GithubService } from '../../modules/github/services/github.service';
 import { GithubHttpClient } from '../../modules/github/client/github.client';
 import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
@@ -61,7 +60,16 @@ async function processMessage(
       channel.nack(msg, false, false);
     } else {
       await delay(WorkerConfig.NACK_RETRY_DELAY_MS);
-      channel.nack(msg, false, true);
+      channel.nack(msg, false, false);
+      channel.sendToQueue(QUEUE_NAME, msg.content, {
+        persistent: true,
+        headers: {
+          ...msg.properties.headers,
+          'x-retry-count': retryCount + 1,
+        },
+      });
+
+      Logger.warn(`[Worker] Retrying batch. Attempt ${retryCount + 1}/${MAX_RETRIES}.`);
     }
   }
 }
@@ -71,10 +79,7 @@ async function startWorker(): Promise<void> {
   await channel.prefetch(1);
 
   const githubService = new GithubService(
-    new GithubHttpClient(() => ({
-      Authorization: `Bearer ${config.github.token}`,
-      'Content-Type': 'application/json',
-    })),
+    GithubHttpClient.create(),
     new RedisCacheRepository(),
     new GithubQueryBuilder(),
     new GithubResponseParser(),

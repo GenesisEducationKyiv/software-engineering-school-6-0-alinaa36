@@ -1,15 +1,17 @@
-import { SubscriptionService } from '../../subscriptions/services/subscription.service';
 import { Logger } from '../../../lib/logger/logger';
-import * as cron from 'node-cron';
-import { IJobQueue, IScheduler } from '../interfaces/notifier.interfaces';
+import {
+  IJobQueue,
+  IScheduledTask,
+  IScheduler,
+  ISubscriptionServiceForScanner,
+} from '../interfaces/notifier.interfaces';
 
 const SCAN_CRON_EXPRESSION = '* * * * *';
 
 export class ScannerService {
-  private cronTask: cron.ScheduledTask | null = null;
-
+  private cronTask: IScheduledTask | null = null;
   constructor(
-    private readonly subscriptionService: SubscriptionService,
+    private readonly subscriptionService: ISubscriptionServiceForScanner,
     private readonly scheduler: IScheduler,
     private readonly jobQueue: IJobQueue,
   ) {}

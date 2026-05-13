@@ -43,6 +43,7 @@ export async function addScanJobs(repos: string[]): Promise<void> {
 
       if (!sent) {
         Logger.warn(`[RabbitMQ] Queue buffer full, batch was not sent.`);
+        await redis.del(lockKey);
         continue;
       }
 

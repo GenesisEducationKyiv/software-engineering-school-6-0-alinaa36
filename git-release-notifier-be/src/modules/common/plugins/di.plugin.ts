@@ -9,7 +9,6 @@ import { GithubQueryBuilder } from '../../github/query/github-query.builder';
 import { GithubResponseParser } from '../../github/query/github-response.parser';
 import { RedisCacheRepository } from '../cache/cache.repository';
 import { notifierService } from '../../sender/services/mail.service';
-import { config } from '../../../lib/config/env.config';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -21,10 +20,7 @@ declare module 'fastify' {
 export const diPlugin = fp(
   (fastify: FastifyInstance, _opts: FastifyPluginOptions, done: () => void) => {
     const githubService = new GithubService(
-      new GithubHttpClient(() => ({
-        Authorization: `Bearer ${config.github.token}`,
-        'Content-Type': 'application/json',
-      })),
+      GithubHttpClient.create(),
       new RedisCacheRepository(),
       new GithubQueryBuilder(),
       new GithubResponseParser(),

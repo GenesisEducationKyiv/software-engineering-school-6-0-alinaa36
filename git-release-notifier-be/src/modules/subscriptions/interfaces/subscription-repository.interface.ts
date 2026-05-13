@@ -1,5 +1,10 @@
 import { Subscription } from '@prisma/client';
 
+export interface RepositoryGroup {
+  repository: string;
+  count: number;
+}
+
 export interface ISubscriptionRepository {
   checkIfActiveExists(email: string, repository: string): Promise<boolean>;
   upsertPending(email: string, repository: string): Promise<Subscription>;
@@ -9,5 +14,5 @@ export interface ISubscriptionRepository {
   delete(id: string): Promise<Subscription>;
   findByEmail(email: string): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]>;
   countActive(): Promise<number>;
-  groupByRepository(): Promise<{ repository: string; _count: { repository: number } }[]>;
+  groupByRepository(): Promise<RepositoryGroup[]>;
 }

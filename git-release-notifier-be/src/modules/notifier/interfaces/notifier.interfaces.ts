@@ -1,10 +1,17 @@
-import * as cron from 'node-cron';
+export interface IScheduledTask {
+  stop(): void;
+  start(): void;
+}
 
 export interface IScheduler {
-  schedule(expression: string, handler: () => void): cron.ScheduledTask;
-  stop(task: cron.ScheduledTask): void;
+  schedule(expression: string, handler: () => void): IScheduledTask;
+  stop(task: IScheduledTask): void;
 }
 
 export interface IJobQueue {
   addScanJobs(repos: string[]): Promise<void>;
+}
+
+export interface ISubscriptionServiceForScanner {
+  groupByRepository(): Promise<{ repository: string }[]>;
 }
