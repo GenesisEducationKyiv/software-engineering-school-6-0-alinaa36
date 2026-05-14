@@ -1,6 +1,5 @@
 import fp from 'fastify-plugin';
-import { FastifyInstance } from 'fastify/types/instance';
-import { FastifyPluginOptions } from 'fastify';
+import type { FastifyInstance } from 'fastify/types/instance';
 import { SubscriptionService } from '../../subscriptions/services/subscription.service';
 import { SubscriptionRepository } from '../../subscriptions/repositories/subscription.repository';
 import { GithubService } from '../../github/services/github.service';
@@ -17,24 +16,20 @@ declare module 'fastify' {
   }
 }
 
-export const diPlugin = fp(
-  (fastify: FastifyInstance, _opts: FastifyPluginOptions, done: () => void) => {
-    const githubService = new GithubService(
-      GithubHttpClient.create(),
-      new RedisCacheRepository(),
-      new GithubQueryBuilder(),
-      new GithubResponseParser(),
-    );
+export const diPlugin = fp((fastify: FastifyInstance) => {
+  const githubService = new GithubService(
+    GithubHttpClient.create(),
+    new RedisCacheRepository(),
+    new GithubQueryBuilder(),
+    new GithubResponseParser(),
+  );
 
-    const subscriptionService = new SubscriptionService(
-      new SubscriptionRepository(),
-      githubService,
-      notifierService,
-    );
+  const subscriptionService = new SubscriptionService(
+    new SubscriptionRepository(),
+    githubService,
+    notifierService,
+  );
 
-    fastify.decorate('githubService', githubService);
-    fastify.decorate('subscriptionService', subscriptionService);
-
-    done();
-  },
-);
+  fastify.decorate('githubService', githubService);
+  fastify.decorate('subscriptionService', subscriptionService);
+});

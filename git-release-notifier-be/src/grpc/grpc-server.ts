@@ -1,7 +1,7 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
-import { SubscriptionService } from '../modules/subscriptions/services/subscription.service';
+import type { SubscriptionService } from '../modules/subscriptions/services/subscription.service';
 import { Logger } from '../lib/logger/logger';
 import { AppError, NotFoundError, ValidationError, ConflictError } from '../lib/errors/app.error';
 
@@ -165,7 +165,7 @@ const createHandlers = (subscriptionService: SubscriptionService): ISubscription
   },
 });
 
-export const startGrpcServer = (subscriptionService: SubscriptionService) => {
+export const startGrpcServer = (subscriptionService: SubscriptionService): void => {
   const server = new grpc.Server();
 
   const handlers = createHandlers(subscriptionService);
@@ -176,7 +176,8 @@ export const startGrpcServer = (subscriptionService: SubscriptionService) => {
   server.bindAsync(PORT, grpc.ServerCredentials.createInsecure(), (error, port) => {
     if (error) {
       Logger.error({ err: error }, '[gRPC] Failed to start server');
-      return;
+      
+return;
     }
 
     server.start();

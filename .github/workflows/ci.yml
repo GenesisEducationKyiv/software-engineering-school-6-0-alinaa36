@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
     branches: ["**"]
 
@@ -29,12 +29,13 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run type:check
 
   test:
     name: Run Tests
-    needs: lint 
+    needs: lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -84,28 +85,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
       - name: Unit tests
-        run: npm run test -- --run
+        run: npm run test:unit
+
+      - name: Load test env
+        run: cat .env.test >> $GITHUB_ENV
 
       - name: Apply DB schema
         run: npx prisma db push
-        env:
-          DATABASE_URL: postgresql://postgres:password123@127.0.0.1:5450/github_notifier_test?schema=public
 
       - name: Integration tests
-        run: npx vitest run --config vitest.integration.config.ts
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:password123@127.0.0.1:5450/github_notifier_test?schema=public
-          REDIS_URL: redis://127.0.0.1:6379
-          RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672
-          API_KEY: super-secret-alina-key-2026
-          GITHUB_TOKEN: test-dummy-token-123
-          APP_URL: http://localhost:3001
-          SMTP_HOST: smtp.ethereal.email
-          SMTP_PORT: "587"
-          SMTP_USER: test@ethereal.email
-          SMTP_PASS: testpass
+        run: npm run test:integration:ci

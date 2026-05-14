@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import Fastify, { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import { OpenAPIV2 } from 'openapi-types';
+import type { OpenAPIV2 } from 'openapi-types';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
@@ -25,9 +26,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
 
-  fastify.get('/metrics', async (request, reply) => {
+  fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);
-    return register.metrics();
+    
+return register.metrics();
   });
 
   const swaggerDocument = yaml.load(

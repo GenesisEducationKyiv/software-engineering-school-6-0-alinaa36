@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScannerService } from '../service/notifier.service';
-import {
+import type {
   IScheduler,
   IJobQueue,
   IScheduledTask,
@@ -25,10 +25,12 @@ function makeSubscriptionService(
 
 function makeScheduler(): IScheduler & { getHandler: () => (() => Promise<void>) | undefined } {
   let capturedHandler: (() => Promise<void>) | undefined;
-  return {
+  
+return {
     schedule: vi.fn((_, handler) => {
       capturedHandler = handler;
-      return { stop: vi.fn(), start: vi.fn() } satisfies IScheduledTask;
+      
+return { stop: vi.fn(), start: vi.fn() } satisfies IScheduledTask;
     }),
     stop: vi.fn(),
     getHandler: () => capturedHandler,
@@ -48,7 +50,8 @@ function makeService(
 ) {
   const sub = makeSubscriptionService(repos);
   const service = new ScannerService(sub, scheduler, jobQueue);
-  return { service, sub, scheduler, jobQueue };
+  
+return { service, sub, scheduler, jobQueue };
 }
 
 // ---- тести ----

@@ -2,7 +2,7 @@ import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
 import { WorkerConfig } from '../config/worker.config';
-import { ScanJobPayload } from './scanner.type';
+import type { ScanJobPayload } from './scanner.type';
 
 function buildLockKey(batch: string[]): string {
   return `lock:scan:${Buffer.from(batch.join(',')).toString('base64')}`;
@@ -12,7 +12,8 @@ function calcDynamicTTL(batchSize: number): number {
   const processingTime =
     batchSize * WorkerConfig.MAX_TIME_PER_REPO_SEC +
     batchSize * 10 * WorkerConfig.MAX_TIME_PER_EMAIL_SEC;
-  return processingTime + WorkerConfig.SAFETY_BUFFER_SEC;
+  
+return processingTime + WorkerConfig.SAFETY_BUFFER_SEC;
 }
 
 export async function addScanJobs(repos: string[]): Promise<void> {

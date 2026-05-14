@@ -73,7 +73,11 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
 
     expect(subscribeRes.status).toBe(201);
 
-    const confirmToken = (subscribeRes.body as { _test_token?: string })._test_token;
+    const subInDb = await prisma.subscription.findFirst({
+      where: { email: 'alina-test@example.com', repository: 'facebook/react' },
+    });
+
+    const confirmToken = subInDb!.confirmToken;
     expect(confirmToken).toBeDefined();
 
     const confirmRes = await client.get(`/api/confirm/${confirmToken}`);
@@ -83,16 +87,8 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
       .get('/api/subscriptions?email=alina-test@example.com')
       .set('x-api-key', TEST_API_KEY);
 
-    expect((subsRes.body as { subscriptions: unknown[] }).subscriptions).toHaveLength(1);
-    expect((subsRes.body as { subscriptions: { status: string }[] }).subscriptions[0].status).toBe(
-      'ACTIVE',
-    );
-
-    const subInDb = await prisma.subscription.findFirst({
-      where: { email: 'alina-test@example.com', repository: 'facebook/react' },
-    });
-
-    expect(subInDb?.unsubscribeToken).toBeDefined();
+    expect(subsRes.body.subscriptions).toHaveLength(1);
+    expect(subsRes.body.subscriptions[0].status).toBe('ACTIVE');
 
     const unsubToken = subInDb!.unsubscribeToken;
     const unsubRes = await client.get(`/api/unsubscribe/${unsubToken}`);
@@ -104,8 +100,7 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
       .set('x-api-key', TEST_API_KEY);
 
     expect(finalRes.status).toBe(200);
-    const finalSubscriptions = (finalRes.body as { subscriptions: unknown[] }).subscriptions;
-    expect(finalSubscriptions).toHaveLength(0);
+    expect(finalRes.body.subscriptions).toHaveLength(0);
   });
 
   describe('GitHub Validation (Вимога 6)', () => {

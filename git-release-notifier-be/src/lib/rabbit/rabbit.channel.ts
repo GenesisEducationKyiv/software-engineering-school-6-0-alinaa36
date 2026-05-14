@@ -1,4 +1,4 @@
-import { Channel } from 'amqplib';
+import type { Channel } from 'amqplib';
 import { getRabbitConnection } from './rabbit.connection';
 
 export const QUEUE_NAME = 'github-scanner-queue';

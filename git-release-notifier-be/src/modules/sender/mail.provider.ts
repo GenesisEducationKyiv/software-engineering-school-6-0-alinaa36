@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
-import { SendEmailOptions } from './types/sender-options.type';
-import { EmailProvider } from './interfaces/provider.interface';
+import type { SendEmailOptions } from './types/sender-options.type';
+import type { EmailProvider } from './interfaces/provider.interface';
 import { Logger } from '../../lib/logger/logger';
 import { config } from '../../lib/config/env.config';
 

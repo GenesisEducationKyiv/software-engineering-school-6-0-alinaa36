@@ -1,4 +1,4 @@
-import { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { AppError } from './app.error';
 
@@ -6,7 +6,7 @@ export function errorHandler(
   error: FastifyError | AppError | ZodError | Error,
   request: FastifyRequest,
   reply: FastifyReply,
-) {
+): FastifyReply {
   if (error instanceof AppError) {
     return reply.status(error.statusCode).send({
       status: 'error',

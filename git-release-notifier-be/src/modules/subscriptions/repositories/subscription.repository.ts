@@ -1,6 +1,6 @@
-import { Subscription } from '@prisma/client';
+import type { Subscription } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import {
+import type {
   ISubscriptionRepository,
   RepositoryGroup,
 } from '../interfaces/subscription-repository.interface';

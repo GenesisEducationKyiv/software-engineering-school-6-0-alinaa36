@@ -1,6 +1,6 @@
 import * as cron from 'node-cron';
 import { addScanJobs } from '../../queue/queue.notifier';
-import { IJobQueue, IScheduledTask, IScheduler } from '../interfaces/notifier.interfaces';
+import type { IJobQueue, IScheduledTask, IScheduler } from '../interfaces/notifier.interfaces';
 
 export const cronScheduler: IScheduler = {
   schedule: (expression, handler): IScheduledTask => cron.schedule(expression, handler),

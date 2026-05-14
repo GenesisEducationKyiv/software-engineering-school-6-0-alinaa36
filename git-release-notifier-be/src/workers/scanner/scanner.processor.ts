@@ -1,5 +1,5 @@
 import { Logger } from '../../lib/logger/logger';
-import { ProcessorDeps } from './scanner.type';
+import type { ProcessorDeps } from './scanner.type';
 
 export class ScanBatchProcessor {
   constructor(private readonly deps: ProcessorDeps) {}
@@ -29,12 +29,12 @@ export class ScanBatchProcessor {
 
       const results = await Promise.allSettled(
         subscribersToNotify.map(async (sub) => {
-          await this.deps.notifier.sendReleaseNotification(
-            sub.email,
-            repoName,
-            newTag,
-            sub.unsubscribeToken,
-          );
+          await this.deps.notifier.sendReleaseNotification({
+            email: sub.email,
+            repo: repoName,
+            tag: newTag,
+            unsubscribeToken: sub.unsubscribeToken,
+          });
           await this.deps.repository.updateTags([sub.id], newTag);
         }),
       );

@@ -1,4 +1,4 @@
-import { BatchReleaseResult, GithubGraphQLResponse } from '../types/github-info.type';
+import type { BatchReleaseResult, GithubGraphQLResponse } from '../types/github-info.type';
 
 export class GithubResponseParser {
   parse(json: GithubGraphQLResponse): BatchReleaseResult {

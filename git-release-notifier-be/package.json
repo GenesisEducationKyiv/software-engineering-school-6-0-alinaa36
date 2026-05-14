@@ -9,14 +9,15 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
-    "test": "vitest",
+    "test:unit": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:integration": "node src/scripts/test-integration.js",
     "test:integration:ci": "dotenv-cli -e .env.test --override -- vitest run --config vitest.integration.config.ts",
     "docker:test:up": "docker-compose up -d db-test",
     "docker:test:down": "docker-compose stop db-test",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "type:check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -44,6 +45,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@testcontainers/postgresql": "^11.14.0",
     "@types/amqplib": "^0.10.8",
     "@types/js-yaml": "^4.0.9",
@@ -54,7 +56,7 @@
     "@types/supertest": "^7.2.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "nock": "^14.0.12",
@@ -64,6 +66,7 @@
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.4"
   }
 }

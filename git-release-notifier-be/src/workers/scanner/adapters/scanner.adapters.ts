@@ -1,24 +1,29 @@
 import { prisma } from '../../../lib/prisma';
-import { GithubService } from '../../../modules/github/services/github.service';
+import type { GithubService } from '../../../modules/github/services/github.service';
+import type { BatchReleaseResult } from '../../../modules/github/types/github-info.type';
 import { notifierService } from '../../../modules/sender/services/mail.service';
-import { ISourceProvider, INotifier, ISubscriptionRepository } from '../scanner.type';
+import type {
+  ISourceProvider,
+  INotifier,
+  ISubscriptionRepository,
+  ReleaseNotificationPayload,
+  OutdatedSubscriber,
+} from '../scanner.type';
 
 export class GithubReleaseAdapter implements ISourceProvider {
   constructor(private githubService: GithubService) {}
-  async getLatestReleasesBatch(repos: string[]): Promise<Record<string, string | null>> {
+
+  async getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult> {
     const result = await this.githubService.getLatestReleasesBatch(repos);
-    return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
+    
+return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
   }
 }
 
 export class EmailNotifierAdapter implements INotifier {
-  async sendReleaseNotification(
-    email: string,
-    repo: string,
-    tag: string,
-    token: string,
-  ): Promise<void> {
-    await notifierService.sendReleaseNotification(email, repo, tag, token);
+  async sendReleaseNotification(payload: ReleaseNotificationPayload): Promise<void> {
+    const { email, repo, tag, unsubscribeToken } = payload;
+    await notifierService.sendReleaseNotification(email, repo, tag, unsubscribeToken);
   }
 }
 
@@ -26,7 +31,7 @@ export class PrismaSubscriptionAdapter implements ISubscriptionRepository {
   async getOutdatedSubscribers(
     repoName: string,
     newTag: string,
-  ): Promise<Array<{ id: string; email: string; unsubscribeToken: string }>> {
+  ): Promise<Array<OutdatedSubscriber>> {
     return await prisma.subscription.findMany({
       where: {
         repository: repoName,

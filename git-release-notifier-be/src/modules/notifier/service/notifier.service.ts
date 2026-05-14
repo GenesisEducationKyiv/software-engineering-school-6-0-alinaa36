@@ -1,5 +1,5 @@
 import { Logger } from '../../../lib/logger/logger';
-import {
+import type {
   IJobQueue,
   IScheduledTask,
   IScheduler,
@@ -10,6 +10,7 @@ const SCAN_CRON_EXPRESSION = '* * * * *';
 
 export class ScannerService {
   private cronTask: IScheduledTask | null = null;
+
   constructor(
     private readonly subscriptionService: ISubscriptionServiceForScanner,
     private readonly scheduler: IScheduler,
@@ -19,7 +20,8 @@ export class ScannerService {
   start(): void {
     if (this.cronTask) {
       Logger.warn('[Cron] Already running, ignoring start().');
-      return;
+      
+return;
     }
 
     this.cronTask = this.scheduler.schedule(SCAN_CRON_EXPRESSION, async () => {
@@ -46,7 +48,8 @@ export class ScannerService {
 
     if (repos.length === 0) {
       Logger.info('[Cron] No repositories found, nothing to scan.');
-      return;
+      
+return;
     }
 
     await this.jobQueue.addScanJobs(repos.map((r) => r.repository));

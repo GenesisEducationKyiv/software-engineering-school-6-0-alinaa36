@@ -1,8 +1,9 @@
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
-import { GithubService } from '../../github/services/github.service';
-import { NotifierService } from '../../sender/services/mail.service';
-import { ISubscriptionRepository } from '../interfaces/subscription-repository.interface';
+import type { GithubService } from '../../github/services/github.service';
+import type { NotifierService } from '../../sender/services/mail.service';
+import type { ISubscriptionRepository } from '../interfaces/subscription-repository.interface';
+import { type Subscription } from '@prisma/client/edge';
 
 export class SubscriptionService {
   constructor(
@@ -11,7 +12,7 @@ export class SubscriptionService {
     private readonly notifier: NotifierService,
   ) {}
 
-  async subscribeToRepo(email: string, repository: string) {
+  async subscribeToRepo(email: string, repository: string): Promise<Subscription> {
     const isAlreadySubscribed = await this.subscriptionRepository.checkIfActiveExists(
       email,
       repository,
@@ -33,7 +34,7 @@ export class SubscriptionService {
     return subscription;
   }
 
-  async confirmSubscription(token: string) {
+  async confirmSubscription(token: string): Promise<Subscription> {
     const subscription = await this.subscriptionRepository.findByConfirmToken(token);
 
     if (!subscription) {
@@ -50,7 +51,7 @@ export class SubscriptionService {
     return updatedSubscription;
   }
 
-  async unsubscribeFromRepo(token: string) {
+  async unsubscribeFromRepo(token: string): Promise<Subscription> {
     const subscription = await this.subscriptionRepository.findByUnsubscribeToken(token);
 
     if (!subscription) {
@@ -63,11 +64,13 @@ export class SubscriptionService {
     return deleted;
   }
 
-  async getSubscriptionsByEmail(email: string) {
+  async getSubscriptionsByEmail(
+    email: string,
+  ): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]> {
     return this.subscriptionRepository.findByEmail(email);
   }
 
-  async groupByRepository() {
+  async groupByRepository(): Promise<{ repository: string; count: number }[]> {
     return this.subscriptionRepository.groupByRepository();
   }
 

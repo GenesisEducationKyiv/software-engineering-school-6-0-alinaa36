@@ -105,11 +105,11 @@ describe('Scanner Pipeline (Вимога 3)', () => {
     });
     expect(updatedSub?.lastSeenTag).toBe('v18.2.0');
 
-    expect(mockNotifier.sendReleaseNotification).toHaveBeenCalledWith(
-      'alina-scanner@test.com',
-      targetRepo,
-      'v18.2.0',
-      'unsub-token-unique-123',
-    );
+    expect(mockNotifier.sendReleaseNotification).toHaveBeenCalledWith({
+      email: 'alina-scanner@test.com',
+      repo: targetRepo,
+      tag: 'v18.2.0',
+      unsubscribeToken: 'unsub-token-unique-123',
+    });
   });
 });
