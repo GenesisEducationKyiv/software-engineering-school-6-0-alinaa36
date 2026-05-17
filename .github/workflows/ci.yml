@@ -120,7 +120,6 @@ jobs:
       - name: Set secrets
         run: |
           echo "GITHUB_TOKEN=${{ secrets.API_TOKEN_GITHUB }}" >> $GITHUB_ENV
-          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
 
       - name: Apply DB schema
         run: npx prisma db push
@@ -194,7 +193,6 @@ jobs:
       - name: Set secrets
         run: |
           echo "GITHUB_TOKEN=${{ secrets.API_TOKEN_GITHUB }}" >> $GITHUB_ENV
-          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
 
       - name: Apply DB schema
         run: npx dotenv-cli -e .env.test -- npx prisma db push
