@@ -176,8 +176,8 @@ export const startGrpcServer = (subscriptionService: SubscriptionService): void 
   server.bindAsync(PORT, grpc.ServerCredentials.createInsecure(), (error, port) => {
     if (error) {
       Logger.error({ err: error }, '[gRPC] Failed to start server');
-      
-return;
+
+      return;
     }
 
     server.start();

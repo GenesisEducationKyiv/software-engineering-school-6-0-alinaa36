@@ -13,10 +13,10 @@
 
 ## Metadata
 
-|||
-| :-: | :-: |
-| **Status** | accepted |
-| **Date** | 12.04.26 |
+|               |           |
+| :-----------: | :-------: |
+|  **Status**   | accepted  |
+|   **Date**    | 12.04.26  |
 | **Author(s)** | @alinaa36 |
 
 ---
@@ -55,11 +55,11 @@ allowing horizontal scaling of processing without any changes to the scanner log
 
 ### Configuration
 
-| Parameter | Value | Reason |
-|---|---|---|
-| Queue | `github-scanner-queue` | Single queue for batches from the scanner |
-| `durable` | `true` | Queue survives a RabbitMQ restart |
-| `persistent` | `true` | Messages are persisted to disk |
+| Parameter    | Value                  | Reason                                    |
+| ------------ | ---------------------- | ----------------------------------------- |
+| Queue        | `github-scanner-queue` | Single queue for batches from the scanner |
+| `durable`    | `true`                 | Queue survives a RabbitMQ restart         |
+| `persistent` | `true`                 | Messages are persisted to disk            |
 
 ---
 
@@ -72,6 +72,7 @@ It could have solved the asynchronous batch processing task and since Redis is a
 no additional infrastructure would have been required.
 
 Not chosen because:
+
 - The queue is entirely dependent on Redis — if Redis goes down, both the cache and the queue are lost simultaneously
 - Redis was not designed as a reliable message broker; RabbitMQ provides stronger delivery guarantees
 - Mixing responsibilities — Redis is already used for caching GitHub API responses,
@@ -82,6 +83,7 @@ Not chosen because:
 Kafka is a distributed event streaming platform designed for high throughput and message history retention.
 
 Not chosen because:
+
 - Overly complex for the current project size — requires ZooKeeper or KRaft and separate ops maintenance
 - The project uses a task queue pattern, not event streaming —
   Kafka is optimised for a different scenario

@@ -28,8 +28,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);
-    
-return register.metrics();
+
+    return register.metrics();
   });
 
   const swaggerDocument = yaml.load(

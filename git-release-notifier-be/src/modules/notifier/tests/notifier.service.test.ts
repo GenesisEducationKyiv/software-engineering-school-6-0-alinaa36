@@ -25,12 +25,12 @@ function makeSubscriptionService(
 
 function makeScheduler(): IScheduler & { getHandler: () => (() => Promise<void>) | undefined } {
   let capturedHandler: (() => Promise<void>) | undefined;
-  
-return {
+
+  return {
     schedule: vi.fn((_, handler) => {
       capturedHandler = handler;
-      
-return { stop: vi.fn(), start: vi.fn() } satisfies IScheduledTask;
+
+      return { stop: vi.fn(), start: vi.fn() } satisfies IScheduledTask;
     }),
     stop: vi.fn(),
     getHandler: () => capturedHandler,
@@ -50,8 +50,8 @@ function makeService(
 ) {
   const sub = makeSubscriptionService(repos);
   const service = new ScannerService(sub, scheduler, jobQueue);
-  
-return { service, sub, scheduler, jobQueue };
+
+  return { service, sub, scheduler, jobQueue };
 }
 
 // ---- тести ----

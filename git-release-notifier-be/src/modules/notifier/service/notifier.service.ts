@@ -20,8 +20,8 @@ export class ScannerService {
   start(): void {
     if (this.cronTask) {
       Logger.warn('[Cron] Already running, ignoring start().');
-      
-return;
+
+      return;
     }
 
     this.cronTask = this.scheduler.schedule(SCAN_CRON_EXPRESSION, async () => {
@@ -48,8 +48,8 @@ return;
 
     if (repos.length === 0) {
       Logger.info('[Cron] No repositories found, nothing to scan.');
-      
-return;
+
+      return;
     }
 
     await this.jobQueue.addScanJobs(repos.map((r) => r.repository));

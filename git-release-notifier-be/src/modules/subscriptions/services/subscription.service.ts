@@ -2,8 +2,11 @@ import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
 import type { GithubService } from '../../github/services/github.service';
 import type { NotifierService } from '../../sender/services/mail.service';
-import type { ISubscriptionRepository } from '../interfaces/subscription-repository.interface';
-import { type Subscription } from '@prisma/client/edge';
+import type {
+  ISubscriptionRepository,
+  SubscriptionSummary,
+} from '../interfaces/subscription-repository.interface';
+import type { Subscription } from '@prisma/client';
 
 export class SubscriptionService {
   constructor(
@@ -64,9 +67,7 @@ export class SubscriptionService {
     return deleted;
   }
 
-  async getSubscriptionsByEmail(
-    email: string,
-  ): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]> {
+  async getSubscriptionsByEmail(email: string): Promise<SubscriptionSummary[]> {
     return this.subscriptionRepository.findByEmail(email);
   }
 

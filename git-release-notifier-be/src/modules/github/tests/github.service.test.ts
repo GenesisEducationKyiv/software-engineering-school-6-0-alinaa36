@@ -21,8 +21,8 @@ function makeGraphQLResponse(
       latestRelease: repo.tagName ? { tagName: repo.tagName } : null,
     };
   });
-  
-return { data };
+
+  return { data };
 }
 
 function makeService(overrides: {

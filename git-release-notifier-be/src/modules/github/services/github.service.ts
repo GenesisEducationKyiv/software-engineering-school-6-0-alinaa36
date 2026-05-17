@@ -24,8 +24,8 @@ export class GithubService {
     const cached = await this.cache.get<BatchReleaseResult>(cacheKey);
     if (cached) {
       Logger.info('[GitHub] Releases fetched from Redis cache');
-      
-return cached;
+
+      return cached;
     }
 
     Logger.info('[GitHub] Cache miss. Fetching from API...');
@@ -44,7 +44,7 @@ return cached;
   private buildCacheKey(repos: string[]): string {
     const sorted = [...repos].sort();
     const hash = Buffer.from(sorted.join(',')).toString('base64');
-    
-return `cache:github:releases:${hash}`;
+
+    return `cache:github:releases:${hash}`;
   }
 }

@@ -31,10 +31,10 @@ export function errorHandler(
 
   return reply.status(500).send({
     status: 'error',
-    message: isDev ? (error as Error).message : 'Internal server error',
+    message: isDev ? error.message : 'Internal server error',
     ...(isDev && {
-      errorName: (error as Error).name,
-      stack: (error as Error).stack,
+      errorName: error.name,
+      stack: error.stack,
     }),
   });
 }

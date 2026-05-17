@@ -190,11 +190,11 @@ sequenceDiagram
 Local development is run via Docker Compose.
 CI runs the linter and tests on every push via GitHub Actions.
 
-| Component | Technology | Environment |
-|---|---|---|
-| API server | Node.js + Fastify | Docker |
-| Cron Scanner | Node.js | Docker |
-| Database | PostgreSQL | Docker |
-| Queue | RabbitMQ | Docker |
-| Cache | Redis | Docker |
-| CI | GitHub Actions | lint + tests on push |
+| Component    | Technology        | Environment          |
+| ------------ | ----------------- | -------------------- |
+| API server   | Node.js + Fastify | Docker               |
+| Cron Scanner | Node.js           | Docker               |
+| Database     | PostgreSQL        | Docker               |
+| Queue        | RabbitMQ          | Docker               |
+| Cache        | Redis             | Docker               |
+| CI           | GitHub Actions    | lint + tests on push |

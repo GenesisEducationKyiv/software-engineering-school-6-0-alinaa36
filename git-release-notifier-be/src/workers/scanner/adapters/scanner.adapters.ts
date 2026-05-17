@@ -6,17 +6,16 @@ import type {
   ISourceProvider,
   INotifier,
   ISubscriptionRepository,
-  ReleaseNotificationPayload,
-  OutdatedSubscriber,
-} from '../scanner.type';
+} from '../interfaces/scanner.interfaces';
+import type { ReleaseNotificationPayload, OutdatedSubscriber } from '../types/scanner.type';
 
 export class GithubReleaseAdapter implements ISourceProvider {
   constructor(private githubService: GithubService) {}
 
   async getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult> {
     const result = await this.githubService.getLatestReleasesBatch(repos);
-    
-return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
+
+    return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
   }
 }
 

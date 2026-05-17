@@ -5,6 +5,8 @@ export interface RepositoryGroup {
   count: number;
 }
 
+export type SubscriptionSummary = Pick<Subscription, 'repository' | 'status' | 'createdAt'>;
+
 export interface ISubscriptionRepository {
   checkIfActiveExists(email: string, repository: string): Promise<boolean>;
   upsertPending(email: string, repository: string): Promise<Subscription>;
@@ -12,7 +14,7 @@ export interface ISubscriptionRepository {
   activate(id: string): Promise<Subscription>;
   findByUnsubscribeToken(token: string): Promise<Subscription | null>;
   delete(id: string): Promise<Subscription>;
-  findByEmail(email: string): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]>;
+  findByEmail(email: string): Promise<SubscriptionSummary[]>;
   countActive(): Promise<number>;
   groupByRepository(): Promise<RepositoryGroup[]>;
 }

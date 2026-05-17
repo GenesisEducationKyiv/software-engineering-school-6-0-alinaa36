@@ -14,7 +14,7 @@ import {
   PrismaSubscriptionAdapter,
 } from './adapters/scanner.adapters';
 import { ScanBatchProcessor } from './scanner.processor';
-import type { ScanJobPayload } from './scanner.type';
+import type { ScanJobPayload } from './types/scanner.type';
 
 const MAX_RETRIES = 3;
 
@@ -32,8 +32,8 @@ async function processMessage(
   } catch {
     Logger.error('[Worker] Invalid message format. Discarding.');
     channel.ack(msg);
-    
-return;
+
+    return;
   }
 
   const { repos, lockKey } = payload;

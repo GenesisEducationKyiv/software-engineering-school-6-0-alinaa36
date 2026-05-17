@@ -1,22 +1,5 @@
-import { type BatchReleaseResult } from '../../modules/github/types/github-info.type';
-
-export interface ScanJobPayload {
-  repos: string[];
-  lockKey: string;
-}
-
-export interface ReleaseNotificationPayload {
-  email: string;
-  repo: string;
-  tag: string;
-  unsubscribeToken: string;
-}
-
-export interface OutdatedSubscriber {
-  id: string;
-  email: string;
-  unsubscribeToken: string;
-}
+import type { BatchReleaseResult } from '../../../modules/github/types/github-info.type';
+import type { ReleaseNotificationPayload, OutdatedSubscriber } from '../types/scanner.type';
 
 export interface ISourceProvider {
   getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult>;

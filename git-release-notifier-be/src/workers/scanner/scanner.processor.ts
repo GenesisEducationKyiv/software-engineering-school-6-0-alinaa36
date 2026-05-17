@@ -1,5 +1,5 @@
 import { Logger } from '../../lib/logger/logger';
-import type { ProcessorDeps } from './scanner.type';
+import type { ProcessorDeps } from './interfaces/scanner.interfaces';
 
 export class ScanBatchProcessor {
   constructor(private readonly deps: ProcessorDeps) {}
