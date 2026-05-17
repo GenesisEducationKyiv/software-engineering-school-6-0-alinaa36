@@ -33,9 +33,33 @@ jobs:
       - name: Typecheck
         run: npm run type:check
 
-  test:
-    name: Run Tests
+  unit:
+    name: Unit Tests
     needs: lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: git-release-notifier-be
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: git-release-notifier-be/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm run test:unit
+
+  integration:
+    name: Integration Tests
+    needs: unit
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -70,6 +94,11 @@ jobs:
         image: rabbitmq:3-management-alpine
         ports:
           - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -85,14 +114,93 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Unit tests
-        run: npm run test:unit
-
       - name: Load test env
         run: cat .env.test >> $GITHUB_ENV
+
+      - name: Set secrets
+        run: |
+          echo "GITHUB_TOKEN=${{ secrets.API_TOKEN_GITHUB }}" >> $GITHUB_ENV
+          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
 
       - name: Apply DB schema
         run: npx prisma db push
 
       - name: Integration tests
         run: npm run test:integration:ci
+
+  e2e:
+    name: E2E Tests
+    needs: integration
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: git-release-notifier-be
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: github_notifier_test
+        ports:
+          - 5450:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: git-release-notifier-be/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Load test env
+        run: cat .env.test >> $GITHUB_ENV
+
+      - name: Set secrets
+        run: |
+          echo "GITHUB_TOKEN=${{ secrets.API_TOKEN_GITHUB }}" >> $GITHUB_ENV
+          echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
+
+      - name: Apply DB schema
+        run: npx dotenv-cli -e .env.test -- npx prisma db push
+
+      - name: Build app
+        run: npm run build
+
+      - name: E2E tests
+        run: npx dotenv-cli -e .env.test -- playwright test --config playwright.config.ts

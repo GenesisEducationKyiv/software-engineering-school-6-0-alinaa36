@@ -4,7 +4,7 @@ import prettier from 'eslint-plugin-prettier/recommended';
 
 export default tseslint.config(
   {
-    ignores: ['node_modules/**', 'dist/**'],
+    ignores: ['node_modules/**', 'dist/**', '**/*.js'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -30,6 +30,7 @@ export default tseslint.config(
       'max-depth': ['error', { max: 4 }],
       'newline-before-return': 'error',
       'lines-between-class-members': ['error', 'always'],
+      'no-empty-pattern': 'off',
     },
   },
   {

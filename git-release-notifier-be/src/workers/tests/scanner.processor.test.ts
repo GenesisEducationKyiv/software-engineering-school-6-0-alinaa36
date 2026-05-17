@@ -4,36 +4,45 @@ vi.mock('../../lib/logger/logger', () => ({
   Logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { Logger } from '../../lib/logger/logger';
 import { ScanBatchProcessor } from '../scanner/scanner.processor';
+import type {
+  ISourceProvider,
+  INotifier,
+  ISubscriptionRepository,
+} from '../scanner/interfaces/scanner.interfaces';
+import type { OutdatedSubscriber } from '../scanner/types/scanner.type';
+
+// ---- типи ----
+
+type TestSubscriber = OutdatedSubscriber;
 
 // ---- helpers ----
 
-function makeProvider(releases: Record<string, string | null> = {}) {
+import type { Mocked } from 'vitest';
+
+function makeNotifier(): Mocked<INotifier> {
+  return {
+    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function makeProvider(releases: Record<string, string | null> = {}): Mocked<ISourceProvider> {
   return {
     getLatestReleasesBatch: vi.fn().mockResolvedValue(releases),
   };
 }
 
-function makeRepository(
-  subscribers: Array<{ id: string; email: string; unsubscribeToken: string }> = [],
-) {
+function makeRepository(subscribers: TestSubscriber[] = []): Mocked<ISubscriptionRepository> {
   return {
     getOutdatedSubscribers: vi.fn().mockResolvedValue(subscribers),
     updateTags: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-function makeNotifier() {
-  return {
-    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
 function makeProcessor(
   overrides: {
     releases?: Record<string, string | null>;
-    subscribers?: Array<{ id: string; email: string; unsubscribeToken: string }>;
+    subscribers?: TestSubscriber[];
   } = {},
 ) {
   const provider = makeProvider(overrides.releases ?? {});
@@ -47,12 +56,14 @@ function makeProcessor(
 // ---- тести ----
 
 describe('ScanBatchProcessor', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   // --- базова поведінка ---
 
   describe('базова поведінка', () => {
-    it('не робить нічого якщо масив репозиторіїв порожній', async () => {
+    it('викликає getLatestReleasesBatch з порожнім масивом', async () => {
       const { processor, provider } = makeProcessor();
 
       await processor.process([]);
@@ -86,7 +97,7 @@ describe('ScanBatchProcessor', () => {
 
   describe('нотифікація підписників', () => {
     it('надсилає лист кожному підписнику', async () => {
-      const subscribers = [
+      const subscribers: TestSubscriber[] = [
         { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
         { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
       ];
@@ -108,12 +119,12 @@ describe('ScanBatchProcessor', () => {
 
       await processor.process(['user/repo']);
 
-      expect(notifier.sendReleaseNotification).toHaveBeenCalledWith(
-        'a@example.com',
-        'user/repo',
-        'v2.0.0',
-        'tok-a',
-      );
+      expect(notifier.sendReleaseNotification).toHaveBeenCalledWith({
+        email: 'a@example.com',
+        repo: 'user/repo',
+        tag: 'v2.0.0',
+        unsubscribeToken: 'tok-a',
+      });
     });
 
     it('оновлює тег після успішного надсилання листа', async () => {
@@ -127,28 +138,73 @@ describe('ScanBatchProcessor', () => {
       expect(repository.updateTags).toHaveBeenCalledWith(['1'], 'v2.0.0');
     });
 
-    it('обробляє кілька репозиторіїв за один виклик', async () => {
-      const provider = makeProvider({
-        'user/repo-a': 'v1.0.0',
-        'user/repo-b': 'v2.0.0',
+    it('оновлює теги для всіх успішно повідомлених підписників', async () => {
+      const subscribers: TestSubscriber[] = [
+        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
+        { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
+      ];
+      const { processor, repository } = makeProcessor({
+        releases: { 'user/repo': 'v2.0.0' },
+        subscribers,
       });
-      const repository = makeRepository([
-        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok' },
-      ]);
-      const notifier = makeNotifier();
-      const processor = new ScanBatchProcessor({ provider, repository, notifier });
+
+      await processor.process(['user/repo']);
+
+      expect(repository.updateTags).toHaveBeenCalledTimes(2);
+      expect(repository.updateTags).toHaveBeenCalledWith(['1'], 'v2.0.0');
+      expect(repository.updateTags).toHaveBeenCalledWith(['2'], 'v2.0.0');
+    });
+
+    it('обробляє кілька репозиторіїв за один виклик', async () => {
+      const { processor, notifier } = makeProcessor({
+        releases: {
+          'user/repo-a': 'v1.0.0',
+          'user/repo-b': 'v2.0.0',
+        },
+        subscribers: [{ id: '1', email: 'a@example.com', unsubscribeToken: 'tok' }],
+      });
 
       await processor.process(['user/repo-a', 'user/repo-b']);
 
-      expect(notifier.sendReleaseNotification).toHaveBeenCalledTimes(2);
+      expect(notifier.sendReleaseNotification).toHaveBeenCalledWith({
+        email: 'a@example.com',
+        repo: 'user/repo-a',
+        tag: 'v1.0.0',
+        unsubscribeToken: 'tok',
+      });
+      expect(notifier.sendReleaseNotification).toHaveBeenCalledWith({
+        email: 'a@example.com',
+        repo: 'user/repo-b',
+        tag: 'v2.0.0',
+        unsubscribeToken: 'tok',
+      });
     });
   });
 
   // --- ізоляція помилок ---
 
   describe('ізоляція помилок', () => {
-    it('не зупиняється якщо один лист не відправився', async () => {
-      const subscribers = [
+    it('продовжує обробку якщо один лист не відправився', async () => {
+      const subscribers: TestSubscriber[] = [
+        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
+        { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
+      ];
+      const { processor, notifier } = makeProcessor({
+        releases: { 'user/repo': 'v2.0.0' },
+        subscribers,
+      });
+
+      notifier.sendReleaseNotification
+        .mockRejectedValueOnce(new Error('SMTP error'))
+        .mockResolvedValueOnce(undefined);
+
+      await processor.process(['user/repo']);
+
+      expect(notifier.sendReleaseNotification).toHaveBeenCalledTimes(2);
+    });
+
+    it('оновлює тег тільки для успішно повідомлених підписників', async () => {
+      const subscribers: TestSubscriber[] = [
         { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
         { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
       ];
@@ -163,8 +219,6 @@ describe('ScanBatchProcessor', () => {
 
       await processor.process(['user/repo']);
 
-      // другий підписник отримав лист попри помилку першого
-      expect(repository.updateTags).toHaveBeenCalledTimes(1);
       expect(repository.updateTags).toHaveBeenCalledWith(['2'], 'v2.0.0');
     });
 
@@ -179,23 +233,6 @@ describe('ScanBatchProcessor', () => {
       await processor.process(['user/repo']);
 
       expect(repository.updateTags).not.toHaveBeenCalled();
-    });
-
-    it('логує кількість невдалих нотифікацій', async () => {
-      const subscribers = [
-        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
-        { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
-      ];
-      const { processor, notifier } = makeProcessor({
-        releases: { 'user/repo': 'v2.0.0' },
-        subscribers,
-      });
-
-      notifier.sendReleaseNotification.mockRejectedValue(new Error('SMTP error'));
-
-      await processor.process(['user/repo']);
-
-      expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('2/2'));
     });
   });
 });

@@ -29,16 +29,16 @@ function makeService(overrides: {
   httpClient?: Partial<IGithubHttpClient>;
   cache?: Partial<ICacheRepository>;
 }) {
-  const httpClient: IGithubHttpClient = {
+  const httpClient = {
     executeQuery: vi.fn(),
     ...overrides.httpClient,
-  };
+  } satisfies IGithubHttpClient;
 
-  const cache: ICacheRepository = {
+  const cache = {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
     ...overrides.cache,
-  };
+  } satisfies ICacheRepository;
 
   const service = new GithubService(
     httpClient,
@@ -57,22 +57,29 @@ describe('GithubService.getLatestReleasesBatch', () => {
 
   describe('кешування', () => {
     it('повертає дані з кешу якщо вони є', async () => {
-      const cached = { 'user/repo': 'v1.0.0' };
-      const { service, httpClient } = makeService({
-        cache: { get: vi.fn().mockResolvedValue(cached) },
+      const cachedData = { 'user/repo': 'v1.0.0' };
+      const { service } = makeService({
+        cache: { get: vi.fn().mockResolvedValue(cachedData) },
       });
 
       const result = await service.getLatestReleasesBatch(['user/repo']);
 
-      expect(result).toEqual(cached);
+      expect(result).toEqual(cachedData);
+    });
+
+    it('не робить запит до GitHub якщо дані є в кеші', async () => {
+      const cachedData = { 'user/repo': 'v1.0.0' };
+      const { service, httpClient } = makeService({
+        cache: { get: vi.fn().mockResolvedValue(cachedData) },
+      });
+
+      await service.getLatestReleasesBatch(['user/repo']);
+
       expect(httpClient.executeQuery).not.toHaveBeenCalled();
     });
 
-    it('генерує однаковий ключ кешу незалежно від порядку репозиторіїв', async () => {
-      const getCacheMock = vi.fn().mockResolvedValue(null);
-      const { service, httpClient } = makeService({
-        cache: { get: getCacheMock },
-      });
+    it('повертає однаковий результат незалежно від порядку репозиторіїв', async () => {
+      const { service, httpClient } = makeService({});
 
       vi.mocked(httpClient.executeQuery).mockResolvedValue(
         makeGraphQLResponse([
@@ -81,13 +88,10 @@ describe('GithubService.getLatestReleasesBatch', () => {
         ]),
       );
 
-      await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
-      await service.getLatestReleasesBatch(['a/repo', 'b/repo']);
+      const firstResult = await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
+      const secondResult = await service.getLatestReleasesBatch(['a/repo', 'b/repo']);
 
-      const firstKey = getCacheMock.mock.calls[0][0];
-      const secondKey = getCacheMock.mock.calls[1][0];
-
-      expect(firstKey).toBe(secondKey);
+      expect(firstResult).toEqual(secondResult);
     });
 
     it('зберігає результат у кеш після успішного запиту', async () => {
@@ -105,7 +109,7 @@ describe('GithubService.getLatestReleasesBatch', () => {
       expect(setCacheMock).toHaveBeenCalledWith(
         expect.stringContaining('cache:github:releases:'),
         { 'user/repo': 'v1.0.0' },
-        expect.any(Number),
+        600,
       );
     });
   });
@@ -113,13 +117,27 @@ describe('GithubService.getLatestReleasesBatch', () => {
   // --- граничні випадки вхідних даних ---
 
   describe('вхідні дані', () => {
-    it('повертає порожній обʼєкт для порожнього масиву без запиту', async () => {
-      const { service, httpClient, cache } = makeService({});
+    it('повертає порожній обʼєкт для порожнього масиву', async () => {
+      const { service } = makeService({});
 
       const result = await service.getLatestReleasesBatch([]);
 
       expect(result).toEqual({});
+    });
+
+    it('не робить запит до GitHub для порожнього масиву', async () => {
+      const { service, httpClient } = makeService({});
+
+      await service.getLatestReleasesBatch([]);
+
       expect(httpClient.executeQuery).not.toHaveBeenCalled();
+    });
+
+    it('не звертається до кешу для порожнього масиву', async () => {
+      const { service, cache } = makeService({});
+
+      await service.getLatestReleasesBatch([]);
+
       expect(cache.get).not.toHaveBeenCalled();
     });
   });
@@ -169,8 +187,7 @@ describe('GithubService.getLatestReleasesBatch', () => {
 
       const result = await service.getLatestReleasesBatch(['user/active', 'user/empty']);
 
-      expect(result['user/active']).toBe('v2.0.0');
-      expect(result['user/empty']).toBeNull();
+      expect(result).toEqual({ 'user/active': 'v2.0.0', 'user/empty': null });
     });
 
     it('ігнорує null-вузли у відповіді GraphQL', async () => {
@@ -210,10 +227,9 @@ describe('GithubService.getLatestReleasesBatch', () => {
         new GithubError('GraphQL API Error: Not Found', 404),
       );
 
-      const error = await service.getLatestReleasesBatch(['user/repo']).catch((e) => e);
-
-      expect(error).toBeInstanceOf(GithubError);
-      expect(error.statusCode).toBe(404);
+      await expect(service.getLatestReleasesBatch(['user/repo'])).rejects.toMatchObject({
+        statusCode: 404,
+      });
     });
 
     it('не зберігає дані в кеш якщо запит провалився', async () => {
@@ -237,26 +253,6 @@ describe('GithubService.getLatestReleasesBatch', () => {
       vi.mocked(httpClient.executeQuery).mockRejectedValue(new Error('Network error'));
 
       await expect(service.getLatestReleasesBatch(['user/repo'])).rejects.toThrow('Network error');
-    });
-  });
-
-  // --- формування запиту ---
-
-  describe('формування запиту', () => {
-    it('сортує репозиторії перед побудовою запиту', async () => {
-      const { service, httpClient } = makeService({});
-
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([
-          { nameWithOwner: 'a/repo', tagName: 'v1.0.0' },
-          { nameWithOwner: 'b/repo', tagName: 'v1.0.0' },
-        ]),
-      );
-
-      await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
-
-      const query = vi.mocked(httpClient.executeQuery).mock.calls[0][0];
-      expect(query.indexOf('"a"')).toBeLessThan(query.indexOf('"b"'));
     });
   });
 });

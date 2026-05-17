@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Channel } from 'amqplib';
 
-// ← спочатку ВСІ vi.mock, імпорти після
 vi.mock('../../../lib/config/env.config', () => ({
   config: {
     app: { url: 'http://localhost:3000', isProd: false },
@@ -9,7 +9,6 @@ vi.mock('../../../lib/config/env.config', () => ({
   },
 }));
 
-// ← шлях відносно тест-файлу: queue/tests/ → lib/rabbit/
 vi.mock('../../../lib/rabbit/rabbit.channel', () => ({
   createChannel: vi.fn(),
   QUEUE_NAME: 'github-scanner-queue',
@@ -30,28 +29,38 @@ vi.mock('../../../workers/config/worker.config', () => ({
   },
 }));
 
-// ← імпорти тільки після всіх vi.mock
 import { createChannel } from '../../../lib/rabbit/rabbit.channel';
 import { redis } from '../../../lib/redis/redis';
 import { addScanJobs } from '../queue.notifier';
 
-function makeChannel() {
+// ---- типи ----
+
+type ScanJobPayload = { repos: string[]; lockKey: string };
+
+// ---- helpers ----
+
+function makeChannel(): Channel {
   return {
     sendToQueue: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
-  };
+  } as unknown as Channel;
+}
+
+function getPayload<T>(channel: Channel, callIndex = 0): T {
+  const buffer = vi.mocked(channel.sendToQueue).mock.calls[callIndex][1] as Buffer;
+
+  return JSON.parse(buffer.toString()) as T;
 }
 
 // ---- тести ----
 
 describe('addScanJobs', () => {
-  let channel: ReturnType<typeof makeChannel>;
+  let channel: Channel;
 
   beforeEach(() => {
     vi.clearAllMocks();
     channel = makeChannel();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(createChannel).mockResolvedValue(channel as any);
+    vi.mocked(createChannel).mockResolvedValue(channel);
     vi.mocked(redis.set).mockResolvedValue('OK');
   });
 
@@ -60,7 +69,7 @@ describe('addScanJobs', () => {
   it('не відправляє жодного повідомлення для порожнього масиву', async () => {
     await addScanJobs([]);
 
-    expect(channel.sendToQueue).not.toHaveBeenCalled();
+    expect(vi.mocked(channel.sendToQueue)).not.toHaveBeenCalled();
   });
 
   it('закриває channel навіть якщо repos порожній', async () => {
@@ -72,7 +81,7 @@ describe('addScanJobs', () => {
   it('відправляє одне повідомлення для одного репозиторію', async () => {
     await addScanJobs(['user/repo']);
 
-    expect(channel.sendToQueue).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(1);
   });
 
   it('закриває channel після відправки', async () => {
@@ -85,12 +94,11 @@ describe('addScanJobs', () => {
 
   describe('розбивка на батчі', () => {
     it('розбиває репозиторії на батчі по BATCH_SIZE', async () => {
-      // BATCH_SIZE = 3, передаємо 7 репо → 3 батчі (3 + 3 + 1)
       const repos = ['r/1', 'r/2', 'r/3', 'r/4', 'r/5', 'r/6', 'r/7'];
 
       await addScanJobs(repos);
 
-      expect(channel.sendToQueue).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(3);
     });
 
     it('payload першого батчу містить перші BATCH_SIZE репозиторіїв', async () => {
@@ -98,8 +106,7 @@ describe('addScanJobs', () => {
 
       await addScanJobs(repos);
 
-      const firstCallBuffer = channel.sendToQueue.mock.calls[0][1] as Buffer;
-      const firstPayload = JSON.parse(firstCallBuffer.toString());
+      const firstPayload = getPayload<ScanJobPayload>(channel, 0);
 
       expect(firstPayload.repos).toEqual(['r/1', 'r/2', 'r/3']);
     });
@@ -109,8 +116,7 @@ describe('addScanJobs', () => {
 
       await addScanJobs(repos);
 
-      const lastCallBuffer = channel.sendToQueue.mock.calls[1][1] as Buffer;
-      const lastPayload = JSON.parse(lastCallBuffer.toString());
+      const lastPayload = getPayload<ScanJobPayload>(channel, 1);
 
       expect(lastPayload.repos).toEqual(['r/4']);
     });
@@ -123,6 +129,11 @@ describe('addScanJobs', () => {
       await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4']);
 
       expect(redis.set).toHaveBeenCalledTimes(2);
+    });
+
+    it('викликає redis.set з правильними аргументами', async () => {
+      await addScanJobs(['r/1']);
+
       expect(redis.set).toHaveBeenCalledWith(
         expect.stringContaining('lock:scan:'),
         'processing',
@@ -133,12 +144,11 @@ describe('addScanJobs', () => {
     });
 
     it('пропускає батч якщо замок вже встановлено', async () => {
-      // Перший батч заблокований, другий — вільний
       vi.mocked(redis.set).mockResolvedValueOnce(null).mockResolvedValueOnce('OK');
 
       await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4']);
 
-      expect(channel.sendToQueue).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(1);
     });
 
     it('пропускає всі батчі якщо всі замки встановлено', async () => {
@@ -146,15 +156,14 @@ describe('addScanJobs', () => {
 
       await addScanJobs(['r/1', 'r/2', 'r/3']);
 
-      expect(channel.sendToQueue).not.toHaveBeenCalled();
+      expect(vi.mocked(channel.sendToQueue)).not.toHaveBeenCalled();
     });
 
     it('payload містить lockKey який відповідає ключу в Redis', async () => {
       await addScanJobs(['user/repo']);
 
       const redisKey = vi.mocked(redis.set).mock.calls[0][0] as string;
-      const payloadBuffer = channel.sendToQueue.mock.calls[0][1] as Buffer;
-      const payload = JSON.parse(payloadBuffer.toString());
+      const payload = getPayload<ScanJobPayload>(channel, 0);
 
       expect(payload.lockKey).toBe(redisKey);
     });
@@ -175,25 +184,18 @@ describe('addScanJobs', () => {
     it('відправляє повідомлення з persistent: true', async () => {
       await addScanJobs(['user/repo']);
 
-      const options = channel.sendToQueue.mock.calls[0][2];
+      const options = vi.mocked(channel.sendToQueue).mock.calls[0][2];
+
       expect(options).toEqual({ persistent: true });
     });
 
-    it('payload є валідним JSON', async () => {
+    it('payload містить repos та lockKey з коректними значеннями', async () => {
       await addScanJobs(['user/repo']);
 
-      const buffer = channel.sendToQueue.mock.calls[0][1] as Buffer;
-      expect(() => JSON.parse(buffer.toString())).not.toThrow();
-    });
+      const payload = getPayload<ScanJobPayload>(channel, 0);
 
-    it('payload містить repos і lockKey', async () => {
-      await addScanJobs(['user/repo']);
-
-      const buffer = channel.sendToQueue.mock.calls[0][1] as Buffer;
-      const payload = JSON.parse(buffer.toString());
-
-      expect(payload).toHaveProperty('repos');
-      expect(payload).toHaveProperty('lockKey');
+      expect(payload.repos).toEqual(['user/repo']);
+      expect(payload.lockKey).toMatch(/^lock:scan:/);
     });
   });
 
@@ -219,21 +221,13 @@ describe('addScanJobs', () => {
 
       expect(channel.close).toHaveBeenCalledOnce();
     });
-  });
 
-  it('не логує успіх якщо sendToQueue повернув false', async () => {
-    channel.sendToQueue.mockReturnValue(false);
+    it('закриває channel навіть якщо sendToQueue повернув false', async () => {
+      vi.mocked(channel.sendToQueue).mockReturnValue(false);
 
-    await addScanJobs(['user/repo']);
+      await addScanJobs(['user/repo']);
 
-    expect(channel.close).toHaveBeenCalledOnce();
-  });
-
-  it('закриває channel навіть якщо sendToQueue повернув false', async () => {
-    channel.sendToQueue.mockReturnValue(false);
-
-    await addScanJobs(['user/repo']);
-
-    expect(channel.close).toHaveBeenCalledOnce();
+      expect(channel.close).toHaveBeenCalledOnce();
+    });
   });
 });
