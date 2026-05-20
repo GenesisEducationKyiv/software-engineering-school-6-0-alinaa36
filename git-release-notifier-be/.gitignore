@@ -3,5 +3,3 @@
 /.env.test
 /.env.prod
 /src/generated/prisma
-
-/src/generated/prisma

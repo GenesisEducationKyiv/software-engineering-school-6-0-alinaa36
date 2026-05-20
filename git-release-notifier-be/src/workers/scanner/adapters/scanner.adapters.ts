@@ -1,15 +1,6 @@
 import { prisma } from '../../../lib/prisma';
-import { GithubService } from '../../../modules/github/services/github.service';
 import { notifierService } from '../../../modules/sender/services/mail.service';
-import { ISourceProvider, INotifier, ISubscriptionRepository } from '../scanner.type';
-
-export class GithubReleaseAdapter implements ISourceProvider {
-  constructor(private githubService: GithubService) {}
-  async getLatestReleasesBatch(repos: string[]): Promise<Record<string, string | null>> {
-    const result = await this.githubService.getLatestReleasesBatch(repos);
-    return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
-  }
-}
+import { INotifier, ISubscriptionRepository } from '../scanner.type';
 
 export class EmailNotifierAdapter implements INotifier {
   async sendReleaseNotification(

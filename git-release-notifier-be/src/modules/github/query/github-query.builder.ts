@@ -1,9 +1,10 @@
+import { RepositoryFullName } from '../domain';
+
 export class GithubQueryBuilder {
-  buildLatestReleasesQuery(repos: string[]): string {
+  buildLatestReleasesQuery(repos: RepositoryFullName[]): string {
     const repoFragments = repos.map((repoFullName, index) => {
-      const [owner, name] = repoFullName.split('/');
       return `
-        repo${index}: repository(owner: "${owner}", name: "${name}") {
+        repo${index}: repository(owner: "${repoFullName.owner}", name: "${repoFullName.name}") {
           nameWithOwner
           latestRelease {
             tagName

@@ -1,14 +1,18 @@
 import { Logger } from '../../lib/logger/logger';
-import { ProcessorDeps } from './scanner.type';
+import { IRepositoriesReleaseDataProvider, ProcessorDeps } from './scanner.type';
 
 export class ScanBatchProcessor {
-  constructor(private readonly deps: ProcessorDeps) {}
+  constructor(
+    private readonly deps: ProcessorDeps,
+    private readonly repositoriesReleaseDataProvider: IRepositoriesReleaseDataProvider,
+  ) {}
 
   async process(repos: string[]): Promise<void> {
-    const latestReleases = await this.deps.provider.getLatestReleasesBatch(repos);
+    const repoNameToLatestTagMap =
+      await this.repositoriesReleaseDataProvider.getLatestReleasesBatch(repos);
 
     for (const repoName of repos) {
-      const newTag = latestReleases[repoName];
+      const newTag = repoNameToLatestTagMap[repoName];
 
       if (!newTag) {
         continue;

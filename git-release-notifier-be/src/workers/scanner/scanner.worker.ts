@@ -2,19 +2,12 @@ import { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
-import { GithubService } from '../../modules/github/services/github.service';
-import { GithubHttpClient } from '../../modules/github/client/github.client';
-import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
-import { GithubResponseParser } from '../../modules/github/query/github-response.parser';
-import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
 import { WorkerConfig } from '../config/worker.config';
-import {
-  GithubReleaseAdapter,
-  EmailNotifierAdapter,
-  PrismaSubscriptionAdapter,
-} from './adapters/scanner.adapters';
+import { EmailNotifierAdapter, PrismaSubscriptionAdapter } from './adapters/scanner.adapters';
 import { ScanBatchProcessor } from './scanner.processor';
 import { ScanJobPayload } from './scanner.type';
+import { GithubReleaseSourceProviderAdapter } from './infrastructure/adapters/github-release-source-provider.adapter';
+import { createContainer } from '../../modules/common/plugins/container';
 
 const MAX_RETRIES = 3;
 
@@ -78,18 +71,15 @@ async function startWorker(): Promise<void> {
   const channel = await createChannel();
   await channel.prefetch(1);
 
-  const githubService = new GithubService(
-    GithubHttpClient.create(),
-    new RedisCacheRepository(),
-    new GithubQueryBuilder(),
-    new GithubResponseParser(),
-  );
+  const { githubReleaseService } = createContainer();
 
-  const processor = new ScanBatchProcessor({
-    provider: new GithubReleaseAdapter(githubService),
-    notifier: new EmailNotifierAdapter(),
-    repository: new PrismaSubscriptionAdapter(),
-  });
+  const processor = new ScanBatchProcessor(
+    {
+      notifier: new EmailNotifierAdapter(),
+      repository: new PrismaSubscriptionAdapter(),
+    },
+    new GithubReleaseSourceProviderAdapter(githubReleaseService),
+  );
 
   Logger.info('[Worker] Started and ready for work...');
 

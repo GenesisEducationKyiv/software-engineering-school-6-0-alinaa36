@@ -3,8 +3,10 @@ export interface ScanJobPayload {
   lockKey: string;
 }
 
-export interface ISourceProvider {
-  getLatestReleasesBatch(repos: string[]): Promise<Record<string, string | null>>;
+export type RepoNameToLatestTagMap = Record<string, string | null>;
+
+export interface IRepositoriesReleaseDataProvider {
+  getLatestReleasesBatch(repos: string[]): Promise<RepoNameToLatestTagMap>;
 }
 
 export interface INotifier {
@@ -26,7 +28,6 @@ export interface ISubscriptionRepository {
 }
 
 export interface ProcessorDeps {
-  provider: ISourceProvider;
   notifier: INotifier;
   repository: ISubscriptionRepository;
 }

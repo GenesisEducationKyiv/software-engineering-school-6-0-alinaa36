@@ -1,13 +1,12 @@
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
-import { GithubService } from '../../github/services/github.service';
 import { NotifierService } from '../../sender/services/mail.service';
-import { ISubscriptionRepository } from '../interfaces/subscription-repository.interface';
+import { ISubscriptionRepository, IRepositoryProvider } from '../interfaces';
 
 export class SubscriptionService {
   constructor(
     private readonly subscriptionRepository: ISubscriptionRepository,
-    private readonly githubService: GithubService,
+    private readonly repositoryProvider: IRepositoryProvider,
     private readonly notifier: NotifierService,
   ) {}
 
@@ -21,9 +20,9 @@ export class SubscriptionService {
       throw new ConflictError('Ви вже підписані на цей репозиторій');
     }
 
-    const repoData = await this.githubService.getLatestReleasesBatch([repository]);
+    const repoData = await this.repositoryProvider.exists(repository);
 
-    if (repoData[repository] === undefined) {
+    if (!repoData) {
       throw new NotFoundError(`Репозиторій ${repository} не знайдено`);
     }
 
