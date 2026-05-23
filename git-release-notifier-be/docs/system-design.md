@@ -2,37 +2,12 @@
 
 ## Table of Contents
 
-1. [System Requirements](#system-requirements)
-2. [System Overview](#system-overview)
+1. [System Overview](#system-overview)
+2. [System Requirements](#system-requirements)
 3. [High-Level Architecture](#high-level-architecture)
 4. [Components](#components)
 5. [Key Flows](#key-flows)
 6. [Infrastructure](#infrastructure)
-
----
-
-### Functional Requirements
-
-- A user can subscribe to a GitHub repository and receive a confirmation email
-- The system validates the repository existence via GitHub API on subscription
-- A user can unsubscribe from a repository via a link in the email
-- The scanner regularly checks for new releases for all active subscriptions
-- The system sends email notifications when a new release appears
-- The system does not send repeated notifications for an already known release (`last_seen_tag`)
-- API for viewing all subscriptions by email (protected by API key)
-
-### Non-Functional Requirements
-
-- **Reliability:** messages will not be lost on RabbitMQ restart —
-  the queue and messages are persisted to disk (`durable: true`, `persistent: true`)
-- **Security:** protected endpoints require API key authentication via the `x-api-key` header
-- **Caching:** GitHub API responses are cached in Redis with a 10-minute TTL
-  to reduce the number of external requests
-
-### Constraints
-
-- **GitHub API rate limits:** the scanner groups repositories into batches
-  and makes a single GraphQL request per batch instead of one request per repository
 
 ---
 
@@ -43,6 +18,30 @@ A user subscribes to a repository and receives email notifications whenever a ne
 
 The system automatically scans repositories on a schedule, compares the last known release
 with the current one and notifies subscribers only about genuinely new releases.
+
+---
+
+## System Requirements
+
+### Functional Requirements
+
+- A user can subscribe to a GitHub repository and receive a confirmation email
+- The system validates the repository existence via GitHub API on subscription
+- A user can unsubscribe from a repository via a link in the email
+- The scanner regularly checks for new releases for all active subscriptions
+- The system sends email notifications when a new release appears
+- The system does not send repeated notifications for an already known release
+- The system provides an API for viewing all subscriptions by email
+
+### Non-Functional Requirements
+
+- **Reliability:** notifications must not be lost in case of temporary outage of system or system components
+- **Security:** all protected endpoints must ensure client identity verification through a secure, standardized authentication mechanism
+- **Rate limiting:** system must implement a data-retention strategy for external API responses to ensure continuous operation and compliance with provider-specific quotas, while maintaining acceptable data freshness
+
+### Constraints
+
+- **GitHub API rate limits:** the number of external API requests must be minimised
 
 ---
 
@@ -59,9 +58,9 @@ graph TD
         gRPC[gRPC Server]
     end
 
-    DB[(PostgreSQL)]
-    Cache[(Redis)]
-    Queue([RabbitMQ])
+    DB[(Database)]
+    Cache[(Cache)]
+    Queue([Message Broker])
     GitHub[GitHub API]
 
     User --> REST
@@ -80,67 +79,67 @@ graph TD
     Worker --> User
 ```
 
+---
+
 ## Components
 
 ### REST API / gRPC Server
 
 **Responsibility:**
-Handles incoming user requests — subscription, confirmation, unsubscription, viewing subscriptions.
-Data validation on all endpoints. `GET /subscriptions` requires API key authentication;
-all other endpoints are publicly accessible.
+Handles incoming user requests and data validation.
 
 **Technology:**
-Fastify + TypeScript. gRPC as an alternative interface for the same operations.
+Fastify + TypeScript.
 
 ---
 
 ### Cron Scanner
 
 **Responsibility:**
-Regularly reads active subscriptions from the database, groups repositories into batches
-and publishes jobs to the RabbitMQ queue. Not responsible for sending emails.
+Regularly checks the system state and publishes jobs to the queue.
 
 **Technology:**
-Node.js cron job. Redis is used for the lock mechanism —
-to prevent the same batch from being added to the queue twice.
+Node.js.
 
 ---
 
 ### Email Worker
 
 **Responsibility:**
-Reads batches from the queue, makes a GraphQL request to the GitHub API,
-compares the current release with `last_seen_tag` and sends emails to subscribers for whom a new release has appeared.
-Updates `last_seen_tag` after a successful send.
+Processes jobs from the queue and delivers notifications to users.
 
 **Technology:**
-Node.js RabbitMQ consumer via `amqplib`. Emails are sent via Nodemailer (SMTP).
+Node.js.
 
 ---
 
-### PostgreSQL
+### Database
 
 **Responsibility:**
-Stores user subscriptions, confirmation status and `last_seen_tag` for each repository.
+Stores system data.
 
 **Technology:**
-PostgreSQL + Prisma ORM for migrations and data access.
+PostgreSQL + Prisma ORM.
 
 ---
 
-### Redis
+### Cache
 
 **Responsibility:**
-Caching GitHub API responses with a 10-minute TTL.
-Lock mechanism to prevent duplicate batches in the queue.
+Temporary data storage to reduce load on system components.
+
+**Technology:**
+Redis.
 
 ---
 
-### RabbitMQ
+### Message Broker
 
 **Responsibility:**
-`github-scanner-queue` for transferring batches from the scanner to the worker.
-Guarantees that a job will not be lost on restart (`durable: true`, `persistent: true`).
+Reliable job delivery between system components.
+
+**Technology:**
+RabbitMQ.
 
 ---
 
@@ -150,20 +149,20 @@ Guarantees that a job will not be lost on restart (`durable: true`, `persistent:
 
 The user sends a request with their email and repository name.
 The API validates the repository existence via the GitHub API, saves the subscription
-with a `pending` status and sends an email with a confirmation link.
+and sends an email with a confirmation link.
 The subscription becomes active only after clicking the link.
 
 ```mermaid
 sequenceDiagram
     actor User
-    User->>REST API: POST /subscribe
+    User->>REST API: subscribe request
     REST API->>GitHub API: validate repository
     GitHub API-->>REST API: repository exists
-    REST API->>PostgreSQL: save subscription (pending)
-    REST API->>SMTP: send confirmation email
-    SMTP-->>User: email with confirmation link
-    User->>REST API: GET /confirm/:token
-    REST API->>PostgreSQL: update status to active
+    REST API->>Database: save subscription
+    REST API->>Email Service: send confirmation email
+    Email Service-->>User: email with confirmation link
+    User->>REST API: confirm subscription
+    REST API->>Database: update status to active
 ```
 
 ---
@@ -174,12 +173,12 @@ The cron scanner reads active subscriptions from the database and publishes repo
 
 ```mermaid
 sequenceDiagram
-    Cron Scanner->>PostgreSQL: read active subscriptions
-    Cron Scanner->>RabbitMQ: publish repository batches
-    RabbitMQ->>Email Worker: deliver batch
+    Cron Scanner->>Database: read active subscriptions
+    Cron Scanner->>Message Broker: publish repository batches
+    Message Broker->>Email Worker: deliver batch
     Email Worker->>GitHub API: check current releases
     Email Worker->>User: send email
-    Email Worker->>PostgreSQL: update last_seen_tag
+    Email Worker->>Database: update release state
 ```
 
 ---
@@ -188,8 +187,7 @@ sequenceDiagram
 
 Local development is run via Docker Compose. All services share a single Docker network
 and communicate via service names as hostnames.
-Environment variables are configured via `.env` file — see `.env.example` for the full list
-of required variables including `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URL`, `GITHUB_TOKEN` and SMTP credentials.
+Environment variables are configured via `.env` file — see `.env.example` for the full list of required variables.
 
 To spin up the local environment:
 
@@ -208,4 +206,4 @@ CI runs the linter and tests on every push via GitHub Actions.
 | Database | PostgreSQL | Docker |
 | Queue | RabbitMQ | Docker |
 | Cache | Redis | Docker |
-| CI | GitHub Actions | lint + tests on push |
+| CI | GitHub Actions | — |
