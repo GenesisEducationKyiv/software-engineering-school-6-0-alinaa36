@@ -4,6 +4,7 @@ import nock from 'nock';
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
+import { randomUUID } from 'crypto';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
@@ -26,7 +27,11 @@ vi.mock('nodemailer', () => ({
 
 // ---- constants ----
 
-const TEST_API_KEY = process.env.API_KEY ?? 'super-secret-alina-key-2026';
+const TEST_API_KEY =
+  process.env.API_KEY ??
+  (() => {
+    throw new Error('API_KEY not set');
+  })();
 const TEST_EMAIL = 'test@example.com';
 const TEST_REPO = 'facebook/react';
 
@@ -70,8 +75,8 @@ async function createPendingSubscription(
       email: TEST_EMAIL,
       repository: TEST_REPO,
       status: 'PENDING',
-      confirmToken: 'test-confirm-token',
-      unsubscribeToken: 'test-unsub-token',
+      confirmToken: randomUUID(),
+      unsubscribeToken: randomUUID(),
       ...overrides,
     },
   });
@@ -91,8 +96,8 @@ async function createActiveSubscription(
       email: TEST_EMAIL,
       repository: TEST_REPO,
       status: 'ACTIVE',
-      confirmToken: 'test-confirm-token-active',
-      unsubscribeToken: 'test-unsub-token-active',
+      confirmToken: randomUUID(),
+      unsubscribeToken: randomUUID(),
       ...overrides,
     },
   });

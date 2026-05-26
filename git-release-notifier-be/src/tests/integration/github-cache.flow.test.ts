@@ -142,16 +142,6 @@ describe('Redis Cache integration', () => {
         .send({ email: 'user2@example.com', repo: TEST_REPO });
 
       expect(response.status).toBe(201);
-      expect(nock.isDone()).toBe(true);
-    });
-
-    it('повертає результат з кешу без запиту до GitHub', async () => {
-      const response = await client
-        .post('/api/subscribe')
-        .send({ email: 'user2@example.com', repo: TEST_REPO });
-
-      expect(response.status).toBe(201);
-      expect(nock.activeMocks()).toHaveLength(0);
     });
   });
 

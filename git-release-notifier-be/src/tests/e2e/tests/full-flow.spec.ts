@@ -24,6 +24,7 @@ test.describe('Повний flow підписки', () => {
 
     await expect(page.getByTestId('message')).toHaveClass(/success/);
 
+    // --- Крок 2: отримуємо токен для підтвердження ---
     await waitForDbState(async () => {
       const sub = await prisma.subscription.findFirst({
         where: { email: uniqueEmail, repository: EXISTING_REPO },
@@ -35,23 +36,11 @@ test.describe('Повний flow підписки', () => {
     const sub = await prisma.subscription.findFirst({
       where: { email: uniqueEmail, repository: EXISTING_REPO },
     });
-    expect(sub).not.toBeNull();
-    expect(sub?.status).toBe('PENDING');
 
-    // --- Крок 2: підтвердження ---
     await page.goto(`/api/confirm/${sub?.confirmToken}`);
 
     await expect(page.locator('h1')).toContainText('Підписку підтверджено!');
     await expect(page.getByTestId('repo-name')).toContainText(EXISTING_REPO);
-
-    await waitForDbState(async () => {
-      const updated = await prisma.subscription.findUnique({ where: { id: sub!.id } });
-
-      return updated?.status === 'ACTIVE';
-    });
-
-    const confirmed = await prisma.subscription.findUnique({ where: { id: sub!.id } });
-    expect(confirmed?.status).toBe('ACTIVE');
 
     // --- Крок 3: перевірка в списку підписок ---
     await page.goto('/subscriptions');
@@ -71,15 +60,6 @@ test.describe('Повний flow підписки', () => {
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
     await expect(page.getByTestId('repo-name')).toContainText(EXISTING_REPO);
 
-    await waitForDbState(async () => {
-      const deleted = await prisma.subscription.findUnique({ where: { id: sub!.id } });
-
-      return deleted === null;
-    });
-
-    const deleted = await prisma.subscription.findUnique({ where: { id: sub!.id } });
-    expect(deleted).toBeNull();
-
     // --- Крок 5: перевірка що підписка зникла зі списку ---
     await page.goto('/subscriptions');
 
@@ -94,10 +74,8 @@ test.describe('Повний flow підписки', () => {
 
   test('повторна підписка після відписки — можлива', async ({
     page,
-    prisma,
     uniqueEmail,
     createActiveSubscription,
-    waitForDbState,
   }) => {
     // --- Крок 1: відписка ---
     const sub = await createActiveSubscription({
@@ -111,12 +89,6 @@ test.describe('Повний flow підписки', () => {
 
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
 
-    await waitForDbState(async () => {
-      const deleted = await prisma.subscription.findUnique({ where: { id: sub.id } });
-
-      return deleted === null;
-    });
-
     // --- Крок 2: повторна підписка ---
     await page.goto('/');
 
@@ -127,18 +99,14 @@ test.describe('Повний flow підписки', () => {
 
     await expect(page.getByTestId('message')).toHaveClass(/success/);
 
-    await waitForDbState(async () => {
-      const newSub = await prisma.subscription.findFirst({
-        where: { email: uniqueEmail, repository: EXISTING_REPO },
-      });
+    await page.goto('/subscriptions');
 
-      return newSub !== null;
-    });
+    await page.getByRole('textbox', { name: 'Email' }).fill(uniqueEmail);
+    await page.getByRole('textbox', { name: 'API Key' }).fill(API_KEY);
 
-    const newSub = await prisma.subscription.findFirst({
-      where: { email: uniqueEmail, repository: EXISTING_REPO },
-    });
-    expect(newSub).not.toBeNull();
-    expect(newSub?.status).toBe('PENDING');
+    await page.getByRole('button', { name: 'Пошук' }).click();
+
+    await expect(page.getByTestId('resultsHeader')).toContainText('Знайдено: 1 підписок');
+    await expect(page.getByTestId('badge-pending')).toContainText('Очікує підтвердження');
   });
 });

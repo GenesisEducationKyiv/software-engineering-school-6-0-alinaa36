@@ -78,8 +78,11 @@ describe('GithubService.getLatestReleasesBatch', () => {
       expect(httpClient.executeQuery).not.toHaveBeenCalled();
     });
 
-    it('повертає однаковий результат незалежно від порядку репозиторіїв', async () => {
-      const { service, httpClient } = makeService({});
+    it('генерує однаковий ключ кешу незалежно від порядку репозиторіїв', async () => {
+      const setCacheMock = vi.fn().mockResolvedValue(undefined);
+      const { service, httpClient } = makeService({
+        cache: { set: setCacheMock },
+      });
 
       vi.mocked(httpClient.executeQuery).mockResolvedValue(
         makeGraphQLResponse([
@@ -88,10 +91,13 @@ describe('GithubService.getLatestReleasesBatch', () => {
         ]),
       );
 
-      const firstResult = await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
-      const secondResult = await service.getLatestReleasesBatch(['a/repo', 'b/repo']);
+      await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
+      await service.getLatestReleasesBatch(['a/repo', 'b/repo']);
 
-      expect(firstResult).toEqual(secondResult);
+      const firstKey = setCacheMock.mock.calls[0][0];
+      const secondKey = setCacheMock.mock.calls[1][0];
+
+      expect(firstKey).toBe(secondKey);
     });
 
     it('зберігає результат у кеш після успішного запиту', async () => {

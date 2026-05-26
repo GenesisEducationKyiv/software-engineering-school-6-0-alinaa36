@@ -30,7 +30,6 @@ type DbFixtures = {
 
 export const test = base.extend<DbFixtures>({
   prisma: async ({}, use) => {
-    await prisma.$connect();
     await use(prisma);
   },
 
@@ -92,7 +91,7 @@ export const test = base.extend<DbFixtures>({
         await new Promise((r) => setTimeout(r, 100));
       }
 
-      throw new Error(`waitForDbState: timeout після ${timeout}ms`);
+      throw new Error(`waitForDbState: timeout after ${timeout}ms`);
     });
   },
 });

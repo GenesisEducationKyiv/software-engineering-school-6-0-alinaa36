@@ -15,6 +15,7 @@ import {
 } from '../../workers/scanner/adapters/scanner.adapters';
 import type { INotifier } from '../../workers/scanner/interfaces/scanner.interfaces';
 import type Redis from 'ioredis';
+import { randomUUID } from 'crypto';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
@@ -110,8 +111,8 @@ async function createActiveSubscription(
       repository: TEST_REPO,
       status: 'ACTIVE',
       lastSeenTag: OLD_TAG,
-      confirmToken: 'confirm-token',
-      unsubscribeToken: 'unsub-token',
+      confirmToken: randomUUID(),
+      unsubscribeToken: randomUUID(),
       ...overrides,
     },
   });

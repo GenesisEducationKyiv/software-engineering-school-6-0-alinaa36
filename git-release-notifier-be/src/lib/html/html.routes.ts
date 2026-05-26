@@ -16,19 +16,33 @@ export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
 
   fastify.get('/api/confirm/:token', async (req, rep) => {
     const { token } = req.params as { token: string };
-    const subscription = await fastify.subscriptionService.confirmSubscription(token);
+    try {
+      const subscription = await fastify.subscriptionService.confirmSubscription(token);
+      rep.header('Content-Type', 'text/html; charset=utf-8');
 
-    rep.header('Content-Type', 'text/html; charset=utf-8');
+      return rep.send(renderHtml('confirmed.html', { REPO: subscription.repository }));
+    } catch {
+      rep.header('Content-Type', 'text/html; charset=utf-8');
 
-    return rep.send(renderHtml('confirmed.html', { REPO: subscription.repository }));
+      return rep
+        .status(404)
+        .send(renderHtml('error.html', { MESSAGE: 'Invalid or expired confirmation link' }));
+    }
   });
 
   fastify.get('/api/unsubscribe/:token', async (req, rep) => {
     const { token } = req.params as { token: string };
-    const subscription = await fastify.subscriptionService.unsubscribeFromRepo(token);
+    try {
+      const subscription = await fastify.subscriptionService.unsubscribeFromRepo(token);
+      rep.header('Content-Type', 'text/html; charset=utf-8');
 
-    rep.header('Content-Type', 'text/html; charset=utf-8');
+      return rep.send(renderHtml('unsubscribed.html', { REPO: subscription.repository }));
+    } catch {
+      rep.header('Content-Type', 'text/html; charset=utf-8');
 
-    return rep.send(renderHtml('unsubscribed.html', { REPO: subscription.repository }));
+      return rep
+        .status(404)
+        .send(renderHtml('error.html', { MESSAGE: 'Invalid or expired unsubscribe link' }));
+    }
   });
 }
