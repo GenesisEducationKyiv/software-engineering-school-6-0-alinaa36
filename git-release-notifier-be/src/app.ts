@@ -11,7 +11,8 @@ import { register } from './lib/metrics/metrics';
 import { Logger } from './lib/logger/logger';
 import { errorHandler } from './lib/errors/error.handler';
 import { diPlugin } from './modules/common/plugins/di.plugin';
-import NotifierModule from './modules/notifier/notifier.module';
+import { metricsMiddleware } from './modules/common/middlewares/metrics.middleware';
+import NotifierModule from './modules/scheduler/scheduler.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
 import { htmlRoutes } from './lib/html/html.routes';
 import { fastifyCors } from '@fastify/cors';
@@ -27,6 +28,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: true,
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
+
+  await fastify.register(metricsMiddleware);
 
   fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);

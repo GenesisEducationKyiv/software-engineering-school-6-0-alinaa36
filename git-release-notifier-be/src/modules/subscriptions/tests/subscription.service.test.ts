@@ -1,39 +1,55 @@
 import type { Mocked } from 'vitest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('../../../lib/metrics/metrics', () => ({
-  activeSubscriptionsGauge: { set: vi.fn() },
-}));
-
 import { SubscriptionService } from '../services/subscription.service';
-import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { NotFoundError, ConflictError } from '../../../lib/errors/app.error';
-import type { GithubService } from '../../github/services/github.service';
-import type { NotifierService } from '../../sender/services/mail.service';
 import type {
   ISubscriptionRepository,
-  RepositoryGroup,
+  SubscriptionEntity,
   SubscriptionSummary,
+  RepositoryGroup,
 } from '../interfaces/subscription-repository.interface';
-import type { Subscription } from '@prisma/client';
+import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
+import type { INotifierService } from '../../sender/interfaces/notifier.interface';
+import type { IMetricsGauge } from '../../../lib/metrics/metrics';
 
 // ---- helpers ----
 
 function makeRepository(): Mocked<ISubscriptionRepository> {
   return {
-    upsertPending: vi.fn<(email: string, repository: string) => Promise<Subscription>>(),
-    findByConfirmToken: vi.fn<(token: string) => Promise<Subscription | null>>(),
-    findByUnsubscribeToken: vi.fn<(token: string) => Promise<Subscription | null>>(),
-    activate: vi.fn<(id: string) => Promise<Subscription>>(),
-    delete: vi.fn<(id: string) => Promise<Subscription>>(),
-    findByEmail: vi.fn<(email: string) => Promise<SubscriptionSummary[]>>(),
-    groupByRepository: vi.fn<() => Promise<RepositoryGroup[]>>(),
-    countActive: vi.fn<() => Promise<number>>(),
-    checkIfActiveExists: vi.fn<(email: string, repository: string) => Promise<boolean>>(),
+    upsertPending: vi.fn(),
+    findByConfirmToken: vi.fn(),
+    findByUnsubscribeToken: vi.fn(),
+    activate: vi.fn(),
+    delete: vi.fn(),
+    findByEmail: vi.fn(),
+    groupByRepository: vi.fn(),
+    countActive: vi.fn(),
+    checkIfActiveExists: vi.fn(),
   };
 }
 
-function makeSubscription(overrides: Partial<Subscription> = {}): Subscription {
+function makeRepoProvider(): Mocked<IRepositoryProvider> {
+  return {
+    exists: vi.fn().mockResolvedValue(true),
+  };
+}
+
+function makeNotifier(): Mocked<INotifierService> {
+  return {
+    sendConfirmationEmail: vi.fn().mockResolvedValue(undefined),
+    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function makeGauge(): Mocked<IMetricsGauge> {
+  return {
+    set: vi.fn(),
+    inc: vi.fn(),
+    dec: vi.fn(),
+  };
+}
+
+function makeSubscription(overrides: Partial<SubscriptionEntity> = {}): SubscriptionEntity {
   return {
     id: '1',
     email: 'user@example.com',
@@ -47,61 +63,37 @@ function makeSubscription(overrides: Partial<Subscription> = {}): Subscription {
   };
 }
 
-function mockGithubService(): Mocked<GithubService> {
-  return {
-    getLatestReleasesBatch: vi.fn<(repos: string[]) => Promise<Record<string, string | null>>>(),
-  } as unknown as Mocked<GithubService>;
+function makeService() {
+  const repository = makeRepository();
+  const repoProvider = makeRepoProvider();
+  const notifier = makeNotifier();
+  const gauge = makeGauge();
+  const service = new SubscriptionService(repository, repoProvider, notifier, gauge);
+
+  return { service, repository, repoProvider, notifier, gauge };
 }
 
-function mockNotifierService(): Mocked<NotifierService> {
-  return {
-    sendConfirmationEmail: vi
-      .fn<(email: string, repoFullName: string, token: string) => Promise<void>>()
-      .mockResolvedValue(undefined),
-    sendReleaseNotification: vi
-      .fn<
-        (
-          email: string,
-          repoFullName: string,
-          tagName: string,
-          unsubscribeToken: string,
-        ) => Promise<void>
-      >()
-      .mockResolvedValue(undefined),
-  } as unknown as Mocked<NotifierService>;
-}
+// ---- тести ----
 
 describe('SubscriptionService', () => {
-  let repository: Mocked<ISubscriptionRepository>;
-  let mockedGithubService: Mocked<GithubService>;
-  let mockedNotifierService: Mocked<NotifierService>;
-  let service: SubscriptionService;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    repository = makeRepository();
-    mockedGithubService = mockGithubService();
-    mockedNotifierService = mockNotifierService();
-    service = new SubscriptionService(repository, mockedGithubService, mockedNotifierService);
   });
 
   describe('subscribeToRepo', () => {
-    beforeEach(() => {
-      mockedGithubService.getLatestReleasesBatch.mockResolvedValue({
-        'user/repo': 'v1.0.0',
-      });
+    it('перевіряє існування репозиторію на GitHub', async () => {
+      const { service, repository, repoProvider } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(false);
-    });
-
-    it('викликає GitHub сервіс з правильним репозиторієм', async () => {
       repository.upsertPending.mockResolvedValue(makeSubscription());
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
 
-      expect(mockedGithubService.getLatestReleasesBatch).toHaveBeenCalledWith(['user/repo']);
+      expect(repoProvider.exists).toHaveBeenCalledWith('user/repo');
     });
 
     it('зберігає підписку в базі даних', async () => {
+      const { service, repository } = makeService();
+      repository.checkIfActiveExists.mockResolvedValue(false);
       repository.upsertPending.mockResolvedValue(makeSubscription());
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
@@ -110,11 +102,13 @@ describe('SubscriptionService', () => {
     });
 
     it('надсилає confirmation email з токеном', async () => {
+      const { service, repository, notifier } = makeService();
+      repository.checkIfActiveExists.mockResolvedValue(false);
       repository.upsertPending.mockResolvedValue(makeSubscription({ confirmToken: 'confirm-tok' }));
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
 
-      expect(mockedNotifierService.sendConfirmationEmail).toHaveBeenCalledWith(
+      expect(notifier.sendConfirmationEmail).toHaveBeenCalledWith(
         'user@example.com',
         'user/repo',
         'confirm-tok',
@@ -122,7 +116,9 @@ describe('SubscriptionService', () => {
     });
 
     it('повертає створену підписку', async () => {
+      const { service, repository } = makeService();
       const subscription = makeSubscription();
+      repository.checkIfActiveExists.mockResolvedValue(false);
       repository.upsertPending.mockResolvedValue(subscription);
 
       const result = await service.subscribeToRepo('user@example.com', 'user/repo');
@@ -131,6 +127,7 @@ describe('SubscriptionService', () => {
     });
 
     it('кидає ConflictError якщо активна підписка вже існує', async () => {
+      const { service, repository } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(true);
 
       await expect(service.subscribeToRepo('user@example.com', 'user/repo')).rejects.toThrow(
@@ -139,17 +136,18 @@ describe('SubscriptionService', () => {
     });
 
     it('не зберігає підписку якщо активна вже існує', async () => {
+      const { service, repository } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(true);
 
-      await expect(service.subscribeToRepo('user@example.com', 'user/repo')).rejects.toThrow(
-        ConflictError,
-      );
+      await service.subscribeToRepo('user@example.com', 'user/repo').catch(() => {});
 
       expect(repository.upsertPending).not.toHaveBeenCalled();
     });
 
     it('кидає NotFoundError якщо репозиторій не знайдено на GitHub', async () => {
-      mockedGithubService.getLatestReleasesBatch.mockResolvedValue({});
+      const { service, repository, repoProvider } = makeService();
+      repository.checkIfActiveExists.mockResolvedValue(false);
+      repoProvider.exists.mockResolvedValue(false);
 
       await expect(
         service.subscribeToRepo('user@example.com', 'user/invalid-repo'),
@@ -157,16 +155,18 @@ describe('SubscriptionService', () => {
     });
 
     it('не зберігає підписку якщо репозиторій не знайдено на GitHub', async () => {
-      mockedGithubService.getLatestReleasesBatch.mockResolvedValue({});
+      const { service, repository, repoProvider } = makeService();
+      repository.checkIfActiveExists.mockResolvedValue(false);
+      repoProvider.exists.mockResolvedValue(false);
 
-      await expect(
-        service.subscribeToRepo('user@example.com', 'user/invalid-repo'),
-      ).rejects.toThrow(NotFoundError);
+      await service.subscribeToRepo('user@example.com', 'user/invalid-repo').catch(() => {});
 
       expect(repository.upsertPending).not.toHaveBeenCalled();
     });
 
     it('пробрасовує помилку якщо база даних кинула виняток', async () => {
+      const { service, repository } = makeService();
+      repository.checkIfActiveExists.mockResolvedValue(false);
       repository.upsertPending.mockRejectedValue(new Error('DB error'));
 
       await expect(service.subscribeToRepo('user@example.com', 'user/repo')).rejects.toThrow(
@@ -177,13 +177,14 @@ describe('SubscriptionService', () => {
 
   describe('confirmSubscription', () => {
     it('кидає NotFoundError якщо токен не знайдено', async () => {
-      const invalidToken = 'invalid-token';
+      const { service, repository } = makeService();
       repository.findByConfirmToken.mockResolvedValue(null);
 
-      await expect(service.confirmSubscription(invalidToken)).rejects.toThrow(NotFoundError);
+      await expect(service.confirmSubscription('invalid-token')).rejects.toThrow(NotFoundError);
     });
 
     it('активує підписку за коректним id', async () => {
+      const { service, repository } = makeService();
       repository.findByConfirmToken.mockResolvedValue(makeSubscription({ id: '42' }));
       repository.activate.mockResolvedValue(makeSubscription({ id: '42', status: 'ACTIVE' }));
       repository.countActive.mockResolvedValue(5);
@@ -194,16 +195,18 @@ describe('SubscriptionService', () => {
     });
 
     it('оновлює gauge після активації', async () => {
+      const { service, repository, gauge } = makeService();
       repository.findByConfirmToken.mockResolvedValue(makeSubscription({ id: '1' }));
       repository.activate.mockResolvedValue(makeSubscription({ id: '1', status: 'ACTIVE' }));
       repository.countActive.mockResolvedValue(7);
 
       await service.confirmSubscription('valid-token');
 
-      expect(activeSubscriptionsGauge.set).toHaveBeenCalledWith(7);
+      expect(gauge.set).toHaveBeenCalledWith(7);
     });
 
     it('повертає активовану підписку', async () => {
+      const { service, repository } = makeService();
       const activatedSubscription = makeSubscription({ id: '1', status: 'ACTIVE' });
       repository.findByConfirmToken.mockResolvedValue(makeSubscription({ id: '1' }));
       repository.activate.mockResolvedValue(activatedSubscription);
@@ -217,13 +220,14 @@ describe('SubscriptionService', () => {
 
   describe('unsubscribeFromRepo', () => {
     it('кидає NotFoundError якщо токен не знайдено', async () => {
-      const invalidToken = 'invalid-token';
+      const { service, repository } = makeService();
       repository.findByUnsubscribeToken.mockResolvedValue(null);
 
-      await expect(service.unsubscribeFromRepo(invalidToken)).rejects.toThrow(NotFoundError);
+      await expect(service.unsubscribeFromRepo('invalid-token')).rejects.toThrow(NotFoundError);
     });
 
     it('видаляє підписку за id', async () => {
+      const { service, repository } = makeService();
       repository.findByUnsubscribeToken.mockResolvedValue(makeSubscription({ id: '99' }));
       repository.delete.mockResolvedValue(makeSubscription({ id: '99' }));
       repository.countActive.mockResolvedValue(3);
@@ -234,16 +238,18 @@ describe('SubscriptionService', () => {
     });
 
     it('оновлює gauge після видалення', async () => {
+      const { service, repository, gauge } = makeService();
       repository.findByUnsubscribeToken.mockResolvedValue(makeSubscription({ id: '1' }));
       repository.delete.mockResolvedValue(makeSubscription({ id: '1' }));
       repository.countActive.mockResolvedValue(2);
 
       await service.unsubscribeFromRepo('valid-token');
 
-      expect(activeSubscriptionsGauge.set).toHaveBeenCalledWith(2);
+      expect(gauge.set).toHaveBeenCalledWith(2);
     });
 
     it('повертає видалену підписку', async () => {
+      const { service, repository } = makeService();
       const deletedSubscription = makeSubscription({ id: '1', repository: 'user/repo' });
       repository.findByUnsubscribeToken.mockResolvedValue(makeSubscription({ id: '1' }));
       repository.delete.mockResolvedValue(deletedSubscription);
@@ -257,6 +263,7 @@ describe('SubscriptionService', () => {
 
   describe('getSubscriptionsByEmail', () => {
     it('повертає підписки для email', async () => {
+      const { service, repository } = makeService();
       const userSubscriptions: SubscriptionSummary[] = [
         {
           repository: 'user/repo',
@@ -272,15 +279,16 @@ describe('SubscriptionService', () => {
     });
 
     it('викликає repository.findByEmail з правильним email', async () => {
-      const userEmail = 'user@example.com';
+      const { service, repository } = makeService();
       repository.findByEmail.mockResolvedValue([]);
 
-      await service.getSubscriptionsByEmail(userEmail);
+      await service.getSubscriptionsByEmail('user@example.com');
 
-      expect(repository.findByEmail).toHaveBeenCalledWith(userEmail);
+      expect(repository.findByEmail).toHaveBeenCalledWith('user@example.com');
     });
 
     it('повертає порожній масив якщо підписок немає', async () => {
+      const { service, repository } = makeService();
       repository.findByEmail.mockResolvedValue([]);
 
       const result = await service.getSubscriptionsByEmail('unknown@example.com');
@@ -291,6 +299,7 @@ describe('SubscriptionService', () => {
 
   describe('groupByRepository', () => {
     it('повертає список унікальних репозиторіїв', async () => {
+      const { service, repository } = makeService();
       const repos: RepositoryGroup[] = [
         { repository: 'user/repo-a', count: 2 },
         { repository: 'user/repo-b', count: 1 },
@@ -303,6 +312,7 @@ describe('SubscriptionService', () => {
     });
 
     it('повертає порожній масив якщо підписок немає', async () => {
+      const { service, repository } = makeService();
       repository.groupByRepository.mockResolvedValue([]);
 
       const result = await service.groupByRepository();

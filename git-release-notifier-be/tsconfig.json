@@ -7,8 +7,15 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
-  "include": ["src/**/*", "prisma.config.ts", "prisma/generated"],
-  "exclude": ["node_modules", "dist", "prisma.config.ts", "src/**/*.test.ts", "playwright.config.ts"]
+  "include": ["src/**/*", "prisma.config.ts", "prisma/generated", "codegen.ts"], 
+  "exclude": [
+    "node_modules",
+    "dist",
+    "prisma.config.ts",
+    "src/**/*.test.ts",
+    "playwright.config.ts"
+  ]
 }

@@ -1,35 +1,21 @@
 import type { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
-import { redis } from '../../lib/redis/redis';
-import { GithubService } from '../../modules/github/services/github.service';
-import { GithubHttpClient } from '../../modules/github/client/github.client';
-import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
-import { GithubResponseParser } from '../../modules/github/query/github-response.parser';
-import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
 import { WorkerConfig } from '../config/worker.config';
-import {
-  GithubReleaseAdapter,
-  EmailNotifierAdapter,
-  PrismaSubscriptionAdapter,
-} from './adapters/scanner.adapters';
-import { ScanBatchProcessor } from './scanner.processor';
-import type { ScanJobPayload } from './types/scanner.type';
-
-const MAX_RETRIES = 3;
-
-const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+import { createWorkerContainer } from '../../modules/common/plugins/container.factory';
+import type { ScanBatchProcessor } from './scanner.processor';
+import type { ILockStore } from './infrastructure/lock/lock-store.interface';
+import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
 
 async function processMessage(
   msg: ConsumeMessage,
   processor: ScanBatchProcessor,
   channel: Awaited<ReturnType<typeof createChannel>>,
+  lockStore: ILockStore,
 ): Promise<void> {
-  let payload: ScanJobPayload;
+  const payload = parsePayload(msg);
 
-  try {
-    payload = JSON.parse(msg.content.toString()) as ScanJobPayload;
-  } catch {
+  if (!payload) {
     Logger.error('[Worker] Invalid message format. Discarding.');
     channel.ack(msg);
 
@@ -41,37 +27,17 @@ async function processMessage(
 
   try {
     await processor.process(repos);
-
     channel.ack(msg);
 
     if (lockKey) {
-      await redis.del(lockKey);
-      Logger.info(`[Redis] Lock ${lockKey} released.`);
+      await lockStore.unlock(lockKey);
     }
 
     await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
     Logger.info('[Worker] Batch processed successfully.');
   } catch (error) {
     Logger.error({ err: error }, '[Worker] Processing error');
-
-    const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
-
-    if (retryCount >= MAX_RETRIES) {
-      Logger.error('[Worker] Retry limit exceeded. Sending to DLQ.');
-      channel.nack(msg, false, false);
-    } else {
-      await delay(WorkerConfig.NACK_RETRY_DELAY_MS);
-      channel.nack(msg, false, false);
-      channel.sendToQueue(QUEUE_NAME, msg.content, {
-        persistent: true,
-        headers: {
-          ...msg.properties.headers,
-          'x-retry-count': retryCount + 1,
-        },
-      });
-
-      Logger.warn(`[Worker] Retrying batch. Attempt ${retryCount + 1}/${MAX_RETRIES}.`);
-    }
+    await handleRetry(msg, channel);
   }
 }
 
@@ -79,18 +45,7 @@ async function startWorker(): Promise<void> {
   const channel = await createChannel();
   await channel.prefetch(1);
 
-  const githubService = new GithubService(
-    GithubHttpClient.create(),
-    new RedisCacheRepository(),
-    new GithubQueryBuilder(),
-    new GithubResponseParser(),
-  );
-
-  const processor = new ScanBatchProcessor({
-    provider: new GithubReleaseAdapter(githubService),
-    notifier: new EmailNotifierAdapter(),
-    repository: new PrismaSubscriptionAdapter(),
-  });
+  const { processor, lockStore } = createWorkerContainer();
 
   Logger.info('[Worker] Started and ready for work...');
 
@@ -99,7 +54,7 @@ async function startWorker(): Promise<void> {
     (msg) => {
       if (!msg) return;
 
-      void processMessage(msg, processor, channel).catch((err) => {
+      void processMessage(msg, processor, channel, lockStore).catch((err) => {
         Logger.error({ err }, '[Worker] Unhandled critical error in message consumer');
         try {
           channel.nack(msg, false, false);

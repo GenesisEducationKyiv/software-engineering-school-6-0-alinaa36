@@ -37,21 +37,15 @@ describe('NotifierService', () => {
   });
 
   describe('sendReleaseNotification', () => {
-    const defaultArgs = {
+    const defaultPayload = {
       email: 'user@example.com',
-      repoFullName: 'facebook/react',
-      tagName: 'v18.0.0',
+      repo: 'facebook/react',
+      tag: 'v18.0.0',
       unsubscribeToken: 'token-123',
     } as const;
 
-    async function callSend(overrides = {}) {
-      const args = { ...defaultArgs, ...overrides };
-      await service.sendReleaseNotification(
-        args.email,
-        args.repoFullName,
-        args.tagName,
-        args.unsubscribeToken,
-      );
+    async function callSend(overrides: Partial<typeof defaultPayload> = {}) {
+      await service.sendReleaseNotification({ ...defaultPayload, ...overrides });
     }
 
     it('викликає provider.sendEmail один раз', async () => {
@@ -69,7 +63,7 @@ describe('NotifierService', () => {
     });
 
     it('subject містить назву репо і тег', async () => {
-      await callSend({ repoFullName: 'vuejs/vue', tagName: 'v3.0.0' });
+      await callSend({ repo: 'vuejs/vue', tag: 'v3.0.0' });
 
       expect(provider.sendEmail).toHaveBeenCalledWith(
         expect.objectContaining({ subject: expect.stringContaining('vuejs/vue') }),

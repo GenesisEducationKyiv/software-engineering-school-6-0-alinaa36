@@ -3,9 +3,10 @@ import type { SendEmailOptions } from './types/sender-options.type';
 import type { EmailProvider } from './interfaces/provider.interface';
 import { Logger } from '../../lib/logger/logger';
 import { config } from '../../lib/config/env.config';
+import { MAIL_FROM } from './constants/mail.const';
 
-export class EtherealProvider implements EmailProvider {
-  private transporter: nodemailer.Transporter;
+export class SmtpProvider implements EmailProvider {
+  private readonly transporter: nodemailer.Transporter;
 
   constructor() {
     this.transporter = nodemailer.createTransport({
@@ -22,15 +23,15 @@ export class EtherealProvider implements EmailProvider {
   async sendEmail(options: SendEmailOptions): Promise<void> {
     try {
       const info = await this.transporter.sendMail({
-        from: '"Git Release Notifier" <noreply@notifier.com>',
+        from: MAIL_FROM,
         to: options.to,
         subject: options.subject,
         html: options.html,
       });
 
-      Logger.info(`[Ethereal] Email sent! Preview: ${nodemailer.getTestMessageUrl(info)}`);
+      Logger.info(`[SMTP] Email sent! Preview: ${nodemailer.getTestMessageUrl(info)}`);
     } catch (error) {
-      Logger.error({ err: error }, '[Ethereal] Error sending email');
+      Logger.error({ err: error }, '[SMTP] Error sending email');
       throw error;
     }
   }

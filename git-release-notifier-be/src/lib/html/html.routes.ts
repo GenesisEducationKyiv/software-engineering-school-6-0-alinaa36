@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { renderHtml } from './html.renderer';
+import { HTML_ERROR_MESSAGES } from '../../modules/subscriptions/constants/subscription.messages';
 
 export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', (_req, rep) => {
@@ -26,7 +27,7 @@ export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
 
       return rep
         .status(404)
-        .send(renderHtml('error.html', { MESSAGE: 'Invalid or expired confirmation link' }));
+        .send(renderHtml('error.html', { MESSAGE: HTML_ERROR_MESSAGES.CONFIRM_INVALID }));
     }
   });
 
@@ -42,7 +43,7 @@ export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
 
       return rep
         .status(404)
-        .send(renderHtml('error.html', { MESSAGE: 'Invalid or expired unsubscribe link' }));
+        .send(renderHtml('error.html', { MESSAGE: HTML_ERROR_MESSAGES.UNSUBSCRIBE_INVALID }));
     }
   });
 }
