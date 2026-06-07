@@ -21,7 +21,8 @@ export class ScanBatchProcessor {
     if (subscribersToNotify.length === 0) return;
 
     Logger.info(
-      `New release for ${repoName}: ${newTag}. Sending ${subscribersToNotify.length} emails.`,
+      { repo: repoName, tag: newTag, subscribers: subscribersToNotify.length },
+      '[Scanner] New release detected, sending notifications',
     );
 
     const results = await Promise.allSettled(

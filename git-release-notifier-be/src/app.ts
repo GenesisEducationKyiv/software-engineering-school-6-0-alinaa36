@@ -20,7 +20,7 @@ import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const fastify = Fastify({ logger: false });
+  const fastify = Fastify({ logger: Logger });
 
   fastify.setErrorHandler(errorHandler);
 
@@ -71,10 +71,10 @@ if (require.main === module) {
     .then(async (fastify) => {
       try {
         await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
-        Logger.info('[REST API] Server is running on http://localhost:' + config.server.port);
-        Logger.info(
-          '[REST API] Swagger UI available at http://localhost:' + config.server.port + '/docs',
-        );
+
+        Logger.info({ port: config.server.port }, '[REST API] Server is running');
+        Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
+
         startGrpcServer(fastify.subscriptionService);
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
@@ -86,7 +86,7 @@ if (require.main === module) {
       process.exit(1);
     });
   const shutdown = (signal: string): void => {
-    Logger.info(`Received ${signal}. Shutting down gracefully...`);
+    Logger.info({ signal }, 'Shutting down gracefully');
     process.exit(0);
   };
 

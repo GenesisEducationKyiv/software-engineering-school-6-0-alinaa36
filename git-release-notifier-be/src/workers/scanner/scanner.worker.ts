@@ -16,14 +16,17 @@ async function processMessage(
   const payload = parsePayload(msg);
 
   if (!payload) {
-    Logger.error('[Worker] Invalid message format. Discarding.');
+    Logger.warn(
+      { messageId: msg.properties.messageId },
+      '[Worker] Invalid message format, discarding',
+    );
     channel.ack(msg);
 
     return;
   }
 
   const { repos, lockKey } = payload;
-  Logger.info(`[Worker] Processing ${repos.length} repositories...`);
+  Logger.info({ count: repos.length }, '[Worker] Processing repositories');
 
   try {
     await processor.process(repos);

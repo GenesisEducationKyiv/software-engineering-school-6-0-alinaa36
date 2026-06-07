@@ -21,7 +21,7 @@ export class RedisLockStore implements ILockStore {
 
   async unlock(key: string): Promise<void> {
     await this.redis.del(key);
-    Logger.info(`[Redis] Lock ${key} released.`);
+    Logger.debug({ lockKey: key }, '[Redis] Lock released');
   }
 
   private buildLockKey(batch: string[]): string {

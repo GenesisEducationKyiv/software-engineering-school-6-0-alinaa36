@@ -23,7 +23,10 @@ export async function getRabbitConnection(): Promise<ChannelModel> {
   });
 
   connection.on('close', () => {
-    Logger.warn(`[RabbitMQ] Connection closed. Reconnecting in ${RECONNECT_DELAY_MS} ms...`);
+    Logger.warn(
+      { reconnectDelayMs: RECONNECT_DELAY_MS },
+      '[RabbitMQ] Connection closed, reconnecting',
+    );
     connection = null;
     setTimeout(getRabbitConnection, RECONNECT_DELAY_MS);
   });

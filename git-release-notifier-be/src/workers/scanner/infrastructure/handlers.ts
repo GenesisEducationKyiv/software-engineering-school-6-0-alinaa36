@@ -7,7 +7,9 @@ import { Logger } from '../../../lib/logger/logger';
 export function parsePayload(msg: ConsumeMessage): ScanJobPayload | null {
   try {
     return JSON.parse(msg.content.toString()) as ScanJobPayload;
-  } catch {
+  } catch (err) {
+    Logger.warn({ err }, '[Worker] Failed to parse message payload');
+
     return null;
   }
 }
@@ -22,7 +24,10 @@ export async function handleRetry(
   const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
 
   if (retryCount >= WorkerConfig.MAX_RETRIES) {
-    Logger.error('[Worker] Retry limit exceeded. Sending to DLQ.');
+    Logger.error(
+      { retryCount, maxRetries: WorkerConfig.MAX_RETRIES },
+      '[Worker] Retry limit exceeded, sending to DLQ',
+    );
     channel.nack(msg, false, false);
 
     return;
@@ -38,5 +43,8 @@ export async function handleRetry(
     },
   });
 
-  Logger.warn(`[Worker] Retrying batch. Attempt ${retryCount + 1}/${WorkerConfig.MAX_RETRIES}.`);
+  Logger.warn(
+    { attempt: retryCount + 1, maxRetries: WorkerConfig.MAX_RETRIES },
+    '[Worker] Retrying batch',
+  );
 }
