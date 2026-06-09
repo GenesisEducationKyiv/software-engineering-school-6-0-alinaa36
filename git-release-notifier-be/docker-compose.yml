@@ -43,7 +43,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
-      - '5672:5672'
+      - '5673:5672'
       - '15672:15672'
     restart: always
 
@@ -80,6 +80,30 @@ services:
       - elasticsearch
     restart: always
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - app
+    restart: always
+
+  grafana:
+   image: grafana/grafana:latest
+   ports:
+     - '3002:3000'
+   volumes:
+     - grafana_data:/var/lib/grafana
+     - ./grafana/provisioning:/etc/grafana/provisioning
+   depends_on:
+     - prometheus
+   restart: always
+
 volumes:
   postgres_data:
   es_data:
+  prometheus_data:
+  grafana_data:

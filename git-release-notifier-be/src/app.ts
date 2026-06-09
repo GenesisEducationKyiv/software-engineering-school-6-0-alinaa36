@@ -7,6 +7,8 @@ import type { OpenAPIV2 } from 'openapi-types';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
+import type { Logger as PinoLogger } from 'pino';
+import type { Server, IncomingMessage, ServerResponse } from 'http';
 import { register } from './lib/metrics/metrics';
 import { Logger } from './lib/logger/logger';
 import { errorHandler } from './lib/errors/error.handler';
@@ -19,8 +21,12 @@ import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
 
-export async function buildApp(): Promise<FastifyInstance> {
-  const fastify = Fastify({ logger: Logger });
+type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
+
+export async function buildApp(): Promise<App> {
+  const fastify = Fastify<Server, IncomingMessage, ServerResponse, PinoLogger>({
+    loggerInstance: Logger,
+  });
 
   fastify.setErrorHandler(errorHandler);
 
@@ -85,6 +91,7 @@ if (require.main === module) {
       Logger.error({ err }, '[App] Failed to build app');
       process.exit(1);
     });
+
   const shutdown = (signal: string): void => {
     Logger.info({ signal }, 'Shutting down gracefully');
     process.exit(0);

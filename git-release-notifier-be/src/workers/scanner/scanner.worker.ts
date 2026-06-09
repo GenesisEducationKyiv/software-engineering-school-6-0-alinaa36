@@ -3,13 +3,13 @@ import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../config/worker.config';
 import { createWorkerContainer } from '../../modules/common/plugins/container.factory';
-import type { ScanBatchProcessor } from './scanner.processor';
 import type { ILockStore } from './infrastructure/lock/lock-store.interface';
 import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
+import type { IBatchProcessor } from './interfaces/scanner.interfaces';
 
 async function processMessage(
   msg: ConsumeMessage,
-  processor: ScanBatchProcessor,
+  processor: IBatchProcessor,
   channel: Awaited<ReturnType<typeof createChannel>>,
   lockStore: ILockStore,
 ): Promise<void> {

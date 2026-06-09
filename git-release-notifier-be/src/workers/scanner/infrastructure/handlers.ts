@@ -3,6 +3,7 @@ import type { ScanJobPayload } from '../types/scanner.type';
 import { type createChannel, QUEUE_NAME } from '../../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../../config/worker.config';
 import { Logger } from '../../../lib/logger/logger';
+import { workerRetriesTotal } from '../../../lib/metrics/metrics';
 
 export function parsePayload(msg: ConsumeMessage): ScanJobPayload | null {
   try {
@@ -34,6 +35,9 @@ export async function handleRetry(
   }
 
   await delay(WorkerConfig.NACK_RETRY_DELAY_MS);
+
+  workerRetriesTotal.inc();
+
   channel.nack(msg, false, false);
   channel.sendToQueue(QUEUE_NAME, msg.content, {
     persistent: true,
