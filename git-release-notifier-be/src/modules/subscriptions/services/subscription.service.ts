@@ -73,6 +73,10 @@ export class SubscriptionService {
     return deleted;
   }
 
+  async initMetrics(): Promise<void> {
+    await this.syncActiveGauge();
+  }
+
   async getSubscriptionsByEmail(email: string): Promise<SubscriptionSummary[]> {
     return this.subscriptionRepository.findByEmail(email);
   }

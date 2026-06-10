@@ -1,5 +1,15 @@
 import type { Mocked } from 'vitest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../../lib/logger/logger', () => ({
+  Logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
 import { SubscriptionService } from '../services/subscription.service';
 import { NotFoundError, ConflictError } from '../../../lib/errors/app.error';
 import type {
@@ -44,8 +54,6 @@ function makeNotifier(): Mocked<INotifierService> {
 function makeGauge(): Mocked<IMetricsGauge> {
   return {
     set: vi.fn(),
-    inc: vi.fn(),
-    dec: vi.fn(),
   };
 }
 

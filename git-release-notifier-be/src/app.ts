@@ -81,6 +81,12 @@ if (require.main === module) {
         Logger.info({ port: config.server.port }, '[REST API] Server is running');
         Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
 
+        try {
+          await fastify.subscriptionService.initMetrics();
+        } catch (err) {
+          Logger.warn({ err }, '[Metrics] Failed to initialize active subscriptions gauge');
+        }
+
         startGrpcServer(fastify.subscriptionService);
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
