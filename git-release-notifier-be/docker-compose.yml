@@ -72,15 +72,16 @@ services:
     restart: always
 
   filebeat:
-    image: elastic/filebeat:8.13.0
-    user: root
-    volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      - elasticsearch
-    restart: always
+   image: elastic/filebeat:8.13.0
+   user: root
+   command: filebeat -e --strict.perms=false
+   volumes:
+     - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+     - /var/run/docker.sock:/var/run/docker.sock:ro
+   depends_on:
+     - elasticsearch
+   restart: always
 
   prometheus:
     image: prom/prometheus:latest
