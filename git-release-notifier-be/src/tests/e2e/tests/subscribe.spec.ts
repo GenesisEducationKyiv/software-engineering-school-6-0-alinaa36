@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/base.fixture';
 
-const EXISTING_REPO = 'facebook/react';
+const EXISTING_REPO = 'react/react';
 
 test.describe('Форма підписки', () => {
   test.beforeEach(async ({ page }) => {
