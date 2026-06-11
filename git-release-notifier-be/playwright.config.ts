@@ -23,7 +23,9 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run build && npx dotenv-cli -e .env.test -- cross-env PORT=3001 node dist/app.js',
+    command: process.env.CI
+      ? 'npm run build && cross-env PORT=3001 node dist/app.js'
+      : 'npm run build && npx dotenv-cli -e .env.test -- cross-env PORT=3001 node dist/app.js',
     url: 'http://localhost:3001',
     reuseExistingServer: true,
     timeout: 60_000,
