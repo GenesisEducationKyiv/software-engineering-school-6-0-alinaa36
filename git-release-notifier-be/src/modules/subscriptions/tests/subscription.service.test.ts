@@ -20,7 +20,6 @@ import type {
 } from '../interfaces/subscription-repository.interface';
 import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
 import type { INotifierService } from '../../sender/interfaces/notifier.interface';
-import type { IMetricsGauge } from '../../../lib/metrics/metrics';
 
 // ---- helpers ----
 
@@ -51,12 +50,6 @@ function makeNotifier(): Mocked<INotifierService> {
   };
 }
 
-function makeGauge(): Mocked<IMetricsGauge> {
-  return {
-    set: vi.fn(),
-  };
-}
-
 function makeSubscription(overrides: Partial<SubscriptionEntity> = {}): SubscriptionEntity {
   return {
     id: '1',
@@ -75,10 +68,9 @@ function makeService() {
   const repository = makeRepository();
   const repoProvider = makeRepoProvider();
   const notifier = makeNotifier();
-  const gauge = makeGauge();
-  const service = new SubscriptionService(repository, repoProvider, notifier, gauge);
+  const service = new SubscriptionService(repository, repoProvider, notifier);
 
-  return { service, repository, repoProvider, notifier, gauge };
+  return { service, repository, repoProvider, notifier };
 }
 
 // ---- тести ----
@@ -202,17 +194,6 @@ describe('SubscriptionService', () => {
       expect(repository.activate).toHaveBeenCalledWith('42');
     });
 
-    it('оновлює gauge після активації', async () => {
-      const { service, repository, gauge } = makeService();
-      repository.findByConfirmToken.mockResolvedValue(makeSubscription({ id: '1' }));
-      repository.activate.mockResolvedValue(makeSubscription({ id: '1', status: 'ACTIVE' }));
-      repository.countActive.mockResolvedValue(7);
-
-      await service.confirmSubscription('valid-token');
-
-      expect(gauge.set).toHaveBeenCalledWith(7);
-    });
-
     it('повертає активовану підписку', async () => {
       const { service, repository } = makeService();
       const activatedSubscription = makeSubscription({ id: '1', status: 'ACTIVE' });
@@ -243,17 +224,6 @@ describe('SubscriptionService', () => {
       await service.unsubscribeFromRepo('valid-token');
 
       expect(repository.delete).toHaveBeenCalledWith('99');
-    });
-
-    it('оновлює gauge після видалення', async () => {
-      const { service, repository, gauge } = makeService();
-      repository.findByUnsubscribeToken.mockResolvedValue(makeSubscription({ id: '1' }));
-      repository.delete.mockResolvedValue(makeSubscription({ id: '1' }));
-      repository.countActive.mockResolvedValue(2);
-
-      await service.unsubscribeFromRepo('valid-token');
-
-      expect(gauge.set).toHaveBeenCalledWith(2);
     });
 
     it('повертає видалену підписку', async () => {

@@ -1,7 +1,7 @@
 import type Redis from 'ioredis';
-import { Logger } from '../../../../lib/logger/logger';
-import type { ILockStore } from '../../../../modules/queue/interfaces/lock-store.interface';
-import { WorkerConfig } from '../../../config/worker.config';
+import { Logger } from '../../../lib/logger/logger';
+import type { ILockStore } from '../interfaces/lock-store.interface';
+import { LOCK_TTL } from '../constants/lock.constants';
 
 export class RedisLockStore implements ILockStore {
   constructor(private readonly redis: Redis) {}
@@ -30,9 +30,9 @@ export class RedisLockStore implements ILockStore {
 
   private calcDynamicTTL(batchSize: number): number {
     const processingTime =
-      batchSize * WorkerConfig.MAX_TIME_PER_REPO_SEC +
-      batchSize * 10 * WorkerConfig.MAX_TIME_PER_EMAIL_SEC;
+      batchSize * LOCK_TTL.MAX_TIME_PER_REPO_SEC +
+      batchSize * 10 * LOCK_TTL.MAX_TIME_PER_EMAIL_SEC;
 
-    return processingTime + WorkerConfig.SAFETY_BUFFER_SEC;
+    return processingTime + LOCK_TTL.SAFETY_BUFFER_SEC;
   }
 }

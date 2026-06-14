@@ -3,7 +3,8 @@ import amqp from 'amqplib';
 import 'dotenv/config';
 import { Logger } from '../logger/logger';
 import { config } from '../config/env.config';
-import { RECONNECT_DELAY_MS } from '../../modules/common/constants/api.constants';
+
+export const RECONNECT_DELAY_MS = 5_000;
 
 const RABBIT_URL = config.rabbit.url;
 

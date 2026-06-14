@@ -13,6 +13,7 @@ import { SubscriptionRepository } from '../../modules/subscriptions/repositories
 import type { INotifier } from '../../workers/scanner/interfaces/scanner.interfaces';
 import type Redis from 'ioredis';
 import { randomUUID } from 'crypto';
+import { prisma } from '../../lib/prisma';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
@@ -83,7 +84,7 @@ function makeProcessor(notifier: INotifier, redis: Redis) {
 
   return new ScanBatchProcessor({
     provider: new GithubReleaseAdapter(githubClient),
-    repository: new SubscriptionRepository(),
+    repository: new SubscriptionRepository(prisma),
     notifier,
   });
 }

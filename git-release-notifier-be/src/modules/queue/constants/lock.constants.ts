@@ -1,0 +1,5 @@
+export const LOCK_TTL = {
+  MAX_TIME_PER_REPO_SEC: 2,
+  MAX_TIME_PER_EMAIL_SEC: 1,
+  SAFETY_BUFFER_SEC: 30,
+} as const;

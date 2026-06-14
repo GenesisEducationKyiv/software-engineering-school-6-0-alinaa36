@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance } from 'fastify';
-import { createServerContainer, type ServerContainer } from './container.factory';
+import { createServerContainer, type ServerContainer } from './containers/server.container';
 
 declare module 'fastify' {
   interface FastifyInstance {

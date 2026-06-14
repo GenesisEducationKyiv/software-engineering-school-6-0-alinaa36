@@ -2,10 +2,10 @@ import type { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME, RETRY_QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../config/worker.config';
-import { createWorkerContainer } from '../../composition/container.factory';
 import type { ILockStore } from '../../modules/queue/interfaces/lock-store.interface';
 import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
 import type { IBatchProcessor } from './interfaces/scanner.interfaces';
+import { createWorkerContainer } from '../../composition/containers/worker.container';
 
 async function processMessage(
   msg: ConsumeMessage,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { renderHtml } from './html.renderer';
-import { HTML_ERROR_MESSAGES } from '../../modules/subscriptions/constants/subscription.messages';
+import { renderHtml } from '../../../lib/html/html.renderer';
+import { HTML_ERROR_MESSAGES } from '../constants/subscription.messages';
 
 export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', (_req, rep) => {

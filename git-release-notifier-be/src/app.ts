@@ -15,7 +15,7 @@ import { errorHandler } from './lib/errors/error.handler';
 import { metricsMiddleware } from './modules/common/middlewares/metrics.middleware';
 import SchedulerModule from './modules/scheduler/scheduler.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
-import { htmlRoutes } from './lib/html/html.routes';
+import { htmlRoutes } from './modules/subscriptions/routes/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
@@ -71,8 +71,6 @@ export async function buildApp(): Promise<App> {
 }
 
 if (require.main === module) {
-  void import('./workers/scanner/scanner.worker');
-
   buildApp()
     .then(async (fastify) => {
       try {
@@ -80,12 +78,6 @@ if (require.main === module) {
 
         Logger.info({ port: config.server.port }, '[REST API] Server is running');
         Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
-
-        try {
-          await fastify.subscriptionService.initMetrics();
-        } catch (err) {
-          Logger.warn({ err }, '[Metrics] Failed to initialize active subscriptions gauge');
-        }
 
         startGrpcServer(fastify.subscriptionService);
       } catch (err) {
