@@ -1,6 +1,6 @@
 import type Redis from 'ioredis';
 import { Logger } from '../../../../lib/logger/logger';
-import type { ILockStore } from './lock-store.interface';
+import type { ILockStore } from '../../../../modules/queue/interfaces/lock-store.interface';
 import { WorkerConfig } from '../../../config/worker.config';
 
 export class RedisLockStore implements ILockStore {

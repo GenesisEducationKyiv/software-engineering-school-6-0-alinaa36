@@ -11,7 +11,7 @@ test.describe('Підтвердження підписки', () => {
     const sub = await createPendingSubscription({ repository: 'facebook/react' });
 
     // Act
-    await page.goto(`/api/confirm/${sub.confirmToken}`);
+    await page.goto(`/confirm/${sub.confirmToken}`);
 
     // Assert — UI
     await expect(page.locator('h1')).toContainText('Підписку підтверджено!');
@@ -50,7 +50,7 @@ test.describe('Підтвердження підписки', () => {
     });
 
     // Act
-    await page.goto(`/api/confirm/${sub1.confirmToken}`);
+    await page.goto(`/confirm/${sub1.confirmToken}`);
 
     await waitForDbState(async () => {
       const updated = await prisma.subscription.findUnique({ where: { id: sub1.id } });

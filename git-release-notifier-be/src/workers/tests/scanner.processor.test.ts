@@ -5,12 +5,7 @@ vi.mock('../../lib/logger/logger', () => ({
 }));
 
 import { ScanBatchProcessor } from '../scanner/scanner.processor';
-import type {
-  ISourceProvider,
-  INotifier,
-  ISubscriptionRepository,
-} from '../scanner/interfaces/scanner.interfaces';
-import type { OutdatedSubscriber } from '../scanner/types/scanner.type';
+import type { ISourceProvider, INotifier } from '../scanner/interfaces/scanner.interfaces';
 
 // ---- типи ----
 
@@ -19,6 +14,10 @@ type TestSubscriber = OutdatedSubscriber;
 // ---- helpers ----
 
 import type { Mocked } from 'vitest';
+import type {
+  IScannerSubscriptionRepository,
+  OutdatedSubscriber,
+} from '../../modules/subscriptions/interfaces/subscription-repository.interface';
 
 function makeNotifier(): Mocked<INotifier> {
   return {
@@ -32,7 +31,9 @@ function makeProvider(releases: Record<string, string | null> = {}): Mocked<ISou
   };
 }
 
-function makeRepository(subscribers: TestSubscriber[] = []): Mocked<ISubscriptionRepository> {
+function makeRepository(
+  subscribers: TestSubscriber[] = [],
+): Mocked<IScannerSubscriptionRepository> {
   return {
     getOutdatedSubscribers: vi.fn().mockResolvedValue(subscribers),
     updateTags: vi.fn().mockResolvedValue(undefined),
@@ -63,12 +64,12 @@ describe('ScanBatchProcessor', () => {
   // --- базова поведінка ---
 
   describe('базова поведінка', () => {
-    it('викликає getLatestReleasesBatch з порожнім масивом', async () => {
+    it('не викликає getLatestReleasesBatch з порожнім масивом', async () => {
       const { processor, provider } = makeProcessor();
 
       await processor.process([]);
 
-      expect(provider.getLatestReleasesBatch).toHaveBeenCalledWith([]);
+      expect(provider.getLatestReleasesBatch).not.toHaveBeenCalled();
     });
 
     it('не надсилає листів якщо немає нових релізів', async () => {

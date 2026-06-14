@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import supertest from 'supertest';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import type { App } from '../../app';
 import type { PrismaClient } from '@prisma/client';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
@@ -36,6 +36,15 @@ function mockGithubRateLimit() {
     .reply(403, { message: 'API rate limit exceeded for your IP address.' });
 }
 
+function mockGithubGraphQLRateLimit() {
+  nock('https://api.github.com')
+    .post('/graphql')
+    .reply(200, {
+      data: null,
+      errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }],
+    });
+}
+
 function mockGithubServerError() {
   nock('https://api.github.com').post('/graphql').reply(500, { message: 'Internal Server Error' });
 }
@@ -59,8 +68,14 @@ type ErrorScenario = {
 
 const errorScenarios: ErrorScenario[] = [
   {
-    name: 'rate limit (403)',
+    name: 'rate limit HTTP 403',
     mock: mockGithubRateLimit,
+    minStatus: 400,
+    maxStatus: 499,
+  },
+  {
+    name: 'rate limit GraphQL (HTTP 200 + RATE_LIMITED error)',
+    mock: mockGithubGraphQLRateLimit,
     minStatus: 400,
     maxStatus: 499,
   },
@@ -87,7 +102,7 @@ const errorScenarios: ErrorScenario[] = [
 // ---- setup ----
 
 describe('GitHub Errors handling', () => {
-  let app: FastifyInstance;
+  let app: App;
   let prisma: PrismaClient;
   let client: ReturnType<typeof supertest>;
 

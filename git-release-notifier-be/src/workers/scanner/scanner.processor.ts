@@ -5,6 +5,12 @@ export class ScanBatchProcessor {
   constructor(private readonly deps: ProcessorDeps) {}
 
   async process(repos: string[]): Promise<void> {
+    if (repos.length === 0) {
+      Logger.warn('[Scanner] Received empty repos batch, skipping');
+
+      return;
+    }
+
     const latestReleases = await this.deps.provider.getLatestReleasesBatch(repos);
 
     for (const repoName of repos) {

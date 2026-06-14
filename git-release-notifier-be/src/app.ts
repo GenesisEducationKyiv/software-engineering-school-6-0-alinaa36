@@ -12,16 +12,16 @@ import type { Server, IncomingMessage, ServerResponse } from 'http';
 import { register } from './lib/metrics/metrics';
 import { Logger } from './lib/logger/logger';
 import { errorHandler } from './lib/errors/error.handler';
-import { diPlugin } from './modules/common/plugins/di.plugin';
 import { metricsMiddleware } from './modules/common/middlewares/metrics.middleware';
-import NotifierModule from './modules/scheduler/scheduler.module';
+import SchedulerModule from './modules/scheduler/scheduler.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
 import { htmlRoutes } from './lib/html/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
+import { diPlugin } from './composition/di.plugin';
 
-type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
+export type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
 
 export async function buildApp(): Promise<App> {
   const fastify = Fastify<Server, IncomingMessage, ServerResponse, PinoLogger>({
@@ -65,7 +65,7 @@ export async function buildApp(): Promise<App> {
   await fastify.register(diPlugin);
   await fastify.register(htmlRoutes);
   await fastify.register(subscriptionRoutes, { prefix: '/api' });
-  await fastify.register(NotifierModule);
+  await fastify.register(SchedulerModule);
 
   return fastify;
 }

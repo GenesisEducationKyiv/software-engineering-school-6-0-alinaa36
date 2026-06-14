@@ -1,9 +1,9 @@
 import type { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
-import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
+import { createChannel, QUEUE_NAME, RETRY_QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../config/worker.config';
-import { createWorkerContainer } from '../../modules/common/plugins/container.factory';
-import type { ILockStore } from './infrastructure/lock/lock-store.interface';
+import { createWorkerContainer } from '../../composition/container.factory';
+import type { ILockStore } from '../../modules/queue/interfaces/lock-store.interface';
 import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
 import type { IBatchProcessor } from './interfaces/scanner.interfaces';
 
@@ -40,13 +40,24 @@ async function processMessage(
     Logger.info('[Worker] Batch processed successfully.');
   } catch (error) {
     Logger.error({ err: error }, '[Worker] Processing error');
-    await handleRetry(msg, channel);
+    const permanent = await handleRetry(msg, channel);
+
+    if (permanent && lockKey) {
+      await lockStore.unlock(lockKey);
+    }
   }
 }
 
 async function startWorker(): Promise<void> {
   const channel = await createChannel();
   await channel.prefetch(1);
+
+  await channel.assertQueue(RETRY_QUEUE_NAME, {
+    durable: true,
+    messageTtl: WorkerConfig.NACK_RETRY_DELAY_MS,
+    deadLetterExchange: '',
+    deadLetterRoutingKey: QUEUE_NAME,
+  });
 
   const { processor, lockStore } = createWorkerContainer();
 

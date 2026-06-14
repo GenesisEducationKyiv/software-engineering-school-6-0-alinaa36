@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import type { App } from '../../app';
 import type { PrismaClient } from '@prisma/client';
 import { config } from '../../lib/config/env.config';
 import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
+import { REDIS_CACHE_TTL_SECONDS } from '../../modules/common/constants/api.constants';
 import { GithubClient } from '../../modules/github/client/github.client';
 import { CachedGithubClient } from '../../modules/github/decorators/cached-github.decorator';
 import { ScanBatchProcessor } from '../../workers/scanner/scanner.processor';
@@ -77,6 +78,7 @@ function makeProcessor(notifier: INotifier, redis: Redis) {
   const githubClient = new CachedGithubClient(
     new GithubClient(config.github.token),
     new RedisCacheRepository(redis),
+    REDIS_CACHE_TTL_SECONDS,
   );
 
   return new ScanBatchProcessor({
@@ -112,7 +114,7 @@ async function createActiveSubscription(
 // ---- setup ----
 
 describe('ScanBatchProcessor integration', () => {
-  let app: FastifyInstance;
+  let app: App;
   let prisma: PrismaClient;
   let redis: Redis;
 

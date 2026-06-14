@@ -1,5 +1,4 @@
 import type { ICacheRepository } from '../../common/cache/cache-repository.interface';
-import { REDIS_CACHE_TTL_SECONDS } from '../../common/constants/api.constants';
 import type { IGithubClient } from '../interfaces/github-client.interface';
 import type { BatchReleaseResult } from '../types/github-info.type';
 
@@ -7,6 +6,7 @@ export class CachedGithubClient implements IGithubClient {
   constructor(
     private readonly client: IGithubClient,
     private readonly cache: ICacheRepository,
+    private readonly ttlSeconds: number,
   ) {}
 
   async getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult> {
@@ -16,7 +16,7 @@ export class CachedGithubClient implements IGithubClient {
     if (cached) return cached;
 
     const result = await this.client.getLatestReleasesBatch(repos);
-    await this.cache.set(cacheKey, result, REDIS_CACHE_TTL_SECONDS);
+    await this.cache.set(cacheKey, result, this.ttlSeconds);
 
     return result;
   }

@@ -8,12 +8,6 @@ vi.mock('../../../lib/config/env.config', () => ({
   },
 }));
 
-vi.mock('../mail.provider', () => ({
-  EtherealProvider: vi.fn().mockImplementation(function () {
-    return { sendEmail: vi.fn().mockResolvedValue(undefined) };
-  }),
-}));
-
 vi.mock('../templates/mail.template', () => ({
   getReleaseEmailTemplate: vi.fn().mockReturnValue('<html>release</html>'),
   getConfirmationEmailTemplate: vi.fn().mockReturnValue('<html>confirm</html>'),
@@ -55,21 +49,21 @@ describe('NotifierService', () => {
     });
 
     it('відправляє лист на правильну адресу', async () => {
-      await callSend({ email: 'test@example.com' });
+      await callSend({ email: 'user@example.com' });
 
       expect(provider.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'test@example.com' }),
+        expect.objectContaining({ to: 'user@example.com' }),
       );
     });
 
     it('subject містить назву репо і тег', async () => {
-      await callSend({ repo: 'vuejs/vue', tag: 'v3.0.0' });
+      await callSend({ repo: 'facebook/react', tag: 'v18.0.0' });
 
       expect(provider.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: expect.stringContaining('vuejs/vue') }),
+        expect.objectContaining({ subject: expect.stringContaining('facebook/react') }),
       );
       expect(provider.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ subject: expect.stringContaining('v3.0.0') }),
+        expect.objectContaining({ subject: expect.stringContaining('v18.0.0') }),
       );
     });
 
@@ -82,12 +76,12 @@ describe('NotifierService', () => {
     });
 
     it('передає коректний unsubscribeUrl в шаблон', async () => {
-      await callSend({ unsubscribeToken: 'abc-123' });
+      await callSend({ unsubscribeToken: 'token-123' });
 
       expect(getReleaseEmailTemplate).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
-        'http://localhost:3000/api/unsubscribe/abc-123',
+        'http://localhost:3000/unsubscribe/token-123',
       );
     });
 
@@ -144,7 +138,7 @@ describe('NotifierService', () => {
 
       expect(getConfirmationEmailTemplate).toHaveBeenCalledWith(
         expect.any(String),
-        'http://localhost:3000/api/confirm/xyz-456',
+        'http://localhost:3000/confirm/xyz-456',
       );
     });
 

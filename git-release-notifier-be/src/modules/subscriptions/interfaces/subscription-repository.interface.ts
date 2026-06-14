@@ -1,3 +1,14 @@
+export interface OutdatedSubscriber {
+  id: string;
+  email: string;
+  unsubscribeToken: string;
+}
+
+export interface IScannerSubscriptionRepository {
+  getOutdatedSubscribers(repo: string, newTag: string): Promise<OutdatedSubscriber[]>;
+  updateTags(subscriberIds: string[], newTag: string): Promise<void>;
+}
+
 export interface SubscriptionEntity {
   id: string;
   email: string;

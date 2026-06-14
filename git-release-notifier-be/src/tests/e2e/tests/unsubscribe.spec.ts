@@ -11,7 +11,7 @@ test.describe('Відписка', () => {
     const sub = await createActiveSubscription({ repository: 'facebook/react' });
 
     // Act
-    await page.goto(`/api/unsubscribe/${sub.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub.unsubscribeToken}`);
 
     // Assert — UI
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
@@ -50,7 +50,7 @@ test.describe('Відписка', () => {
     });
 
     // Act
-    await page.goto(`/api/unsubscribe/${sub1.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub1.unsubscribeToken}`);
 
     await waitForDbState(async () => {
       const deleted = await prisma.subscription.findUnique({ where: { id: sub1.id } });

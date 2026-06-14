@@ -1,13 +1,13 @@
 import type { Subscription } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import type {
+  IScannerSubscriptionRepository,
   ISubscriptionRepository,
+  OutdatedSubscriber,
   RepositoryGroup,
   SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
-import type { OutdatedSubscriber } from '../../../workers/scanner/types/scanner.type';
-import type { IScannerSubscriptionRepository } from '../../../workers/scanner/interfaces/scanner.interfaces';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',

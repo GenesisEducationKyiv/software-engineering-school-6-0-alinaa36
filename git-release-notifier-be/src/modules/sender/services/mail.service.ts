@@ -17,7 +17,7 @@ export class NotifierService implements INotifierService {
     tag,
     unsubscribeToken,
   }: ReleaseNotificationPayload): Promise<void> {
-    const unsubscribeUrl = `${this.baseUrl}/api/unsubscribe/${unsubscribeToken}`;
+    const unsubscribeUrl = `${this.baseUrl}/unsubscribe/${unsubscribeToken}`;
 
     await this.provider.sendEmail({
       to: email,
@@ -27,7 +27,7 @@ export class NotifierService implements INotifierService {
   }
 
   async sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void> {
-    const confirmUrl = `${this.baseUrl}/api/confirm/${token}`;
+    const confirmUrl = `${this.baseUrl}/confirm/${token}`;
 
     await this.provider.sendEmail({
       to: email,

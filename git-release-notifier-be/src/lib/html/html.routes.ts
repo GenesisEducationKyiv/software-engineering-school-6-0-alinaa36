@@ -15,7 +15,7 @@ export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
     return rep.send(renderHtml('subscriptions.html'));
   });
 
-  fastify.get('/api/confirm/:token', async (req, rep) => {
+  fastify.get('/confirm/:token', async (req, rep) => {
     const { token } = req.params as { token: string };
     try {
       const subscription = await fastify.subscriptionService.confirmSubscription(token);
@@ -31,7 +31,7 @@ export async function htmlRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  fastify.get('/api/unsubscribe/:token', async (req, rep) => {
+  fastify.get('/unsubscribe/:token', async (req, rep) => {
     const { token } = req.params as { token: string };
     try {
       const subscription = await fastify.subscriptionService.unsubscribeFromRepo(token);

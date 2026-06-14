@@ -1,6 +1,6 @@
 import type { ConsumeMessage } from 'amqplib';
-import type { ScanJobPayload } from '../types/scanner.type';
-import { type createChannel, QUEUE_NAME } from '../../../lib/rabbit/rabbit.channel';
+import type { ScanJobPayload } from '../../../modules/queue/interfaces/scan-queue.interface';
+import { type createChannel, RETRY_QUEUE_NAME } from '../../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../../config/worker.config';
 import { Logger } from '../../../lib/logger/logger';
 import { workerRetriesTotal } from '../../../lib/metrics/metrics';
@@ -21,25 +21,23 @@ export const delay = (ms: number): Promise<void> =>
 export async function handleRetry(
   msg: ConsumeMessage,
   channel: Awaited<ReturnType<typeof createChannel>>,
-): Promise<void> {
+): Promise<boolean> {
   const retryCount = (msg.properties.headers?.['x-retry-count'] ?? 0) as number;
 
   if (retryCount >= WorkerConfig.MAX_RETRIES) {
     Logger.error(
       { retryCount, maxRetries: WorkerConfig.MAX_RETRIES },
-      '[Worker] Retry limit exceeded, sending to DLQ',
+      '[Worker] Retry limit exceeded, discarding message',
     );
     channel.nack(msg, false, false);
 
-    return;
+    return true;
   }
-
-  await delay(WorkerConfig.NACK_RETRY_DELAY_MS);
 
   workerRetriesTotal.inc();
 
   channel.nack(msg, false, false);
-  channel.sendToQueue(QUEUE_NAME, msg.content, {
+  channel.sendToQueue(RETRY_QUEUE_NAME, msg.content, {
     persistent: true,
     headers: {
       ...msg.properties.headers,
@@ -51,4 +49,6 @@ export async function handleRetry(
     { attempt: retryCount + 1, maxRetries: WorkerConfig.MAX_RETRIES },
     '[Worker] Retrying batch',
   );
+
+  return false;
 }

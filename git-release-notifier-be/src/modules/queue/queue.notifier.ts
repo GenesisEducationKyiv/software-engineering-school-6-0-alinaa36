@@ -1,8 +1,11 @@
 import { Logger } from '../../lib/logger/logger';
-import { WorkerConfig } from '../../workers/config/worker.config';
-import type { ILockStore } from '../../workers/scanner/infrastructure/lock/lock-store.interface';
-import type { ScanJobPayload } from '../../workers/scanner/types/scanner.type';
-import type { IScanQueue, IScanQueueSession } from './interfaces/scan-queue.interface';
+import { SCAN_BATCH_SIZE } from '../common/constants/api.constants';
+import type { ILockStore } from './interfaces/lock-store.interface';
+import type {
+  IScanQueue,
+  IScanQueueSession,
+  ScanJobPayload,
+} from './interfaces/scan-queue.interface';
 
 function chunk<T>(items: T[], size: number): T[][] {
   const batches: T[][] = [];
@@ -14,44 +17,37 @@ function chunk<T>(items: T[], size: number): T[][] {
   return batches;
 }
 
-async function publishBatch(
-  session: IScanQueueSession,
-  batch: string[],
-  lockStore: ILockStore,
-): Promise<void> {
-  const { acquired, lockKey } = await lockStore.acquireForBatch(batch);
+export class ScanJobProducer {
+  constructor(
+    private readonly lockStore: ILockStore,
+    private readonly queue: IScanQueue,
+  ) {}
 
-  if (!acquired) {
-    Logger.debug('[Redis] Batch is already in the queue. Skipping.');
-
-    return;
-  }
-
-  const payload: ScanJobPayload = { repos: batch, lockKey };
-  const sent = session.send(payload);
-
-  if (!sent) {
-    Logger.warn(`[Queue] Buffer full, batch was not sent.`);
-    await lockStore.unlock(lockKey);
-
-    return;
-  }
-
-  Logger.info({ batchSize: batch.length }, '[Queue] Batch added to the queue');
-}
-
-export async function addScanJobs(
-  repos: string[],
-  lockStore: ILockStore,
-  queue: IScanQueue,
-): Promise<void> {
-  const session = await queue.open();
-
-  try {
-    for (const batch of chunk(repos, WorkerConfig.BATCH_SIZE)) {
-      await publishBatch(session, batch, lockStore);
+  async addScanJobs(repos: string[]): Promise<void> {
+    const session = await this.queue.open();
+    try {
+      for (const batch of chunk(repos, SCAN_BATCH_SIZE)) {
+        await this.publishBatch(session, batch);
+      }
+    } finally {
+      await session.close();
     }
-  } finally {
-    await session.close();
+  }
+
+  private async publishBatch(session: IScanQueueSession, batch: string[]): Promise<void> {
+    const { acquired, lockKey } = await this.lockStore.acquireForBatch(batch);
+    if (!acquired) {
+      Logger.debug('[Redis] Batch is already in the queue. Skipping.');
+
+      return;
+    }
+    const payload: ScanJobPayload = { repos: batch, lockKey };
+    if (!session.send(payload)) {
+      Logger.warn('[Queue] Buffer full, batch was not sent.');
+      await this.lockStore.unlock(lockKey);
+
+      return;
+    }
+    Logger.info({ batchSize: batch.length }, '[Queue] Batch added to the queue');
   }
 }
