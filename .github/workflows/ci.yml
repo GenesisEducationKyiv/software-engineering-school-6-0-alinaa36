@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci
+        run: npm install
 
       - name: Lint
         run: npm run lint
@@ -54,7 +54,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci
+        run: npm install
 
       - name: Unit tests
         run: npm run test:unit
@@ -75,7 +75,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Unit tests
         run: npm run test:unit -w notification-service
@@ -136,7 +136,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci
+        run: npm install
 
       - name: Load test env
         run: cat .env.test >> $GITHUB_ENV
@@ -207,7 +207,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci
+        run: npm install
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
