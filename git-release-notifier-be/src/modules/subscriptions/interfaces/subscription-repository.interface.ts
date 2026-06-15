@@ -6,7 +6,10 @@ export interface OutdatedSubscriber {
 
 export interface IScannerSubscriptionRepository {
   getOutdatedSubscribers(repo: string, newTag: string): Promise<OutdatedSubscriber[]>;
-  updateTags(subscriberIds: string[], newTag: string): Promise<void>;
+}
+
+export interface ISubscriptionTagRepository {
+  advanceTag(email: string, repository: string, tag: string): Promise<void>;
 }
 
 export interface SubscriptionEntity {

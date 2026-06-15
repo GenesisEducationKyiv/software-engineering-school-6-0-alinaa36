@@ -2,6 +2,7 @@ import type { PrismaClient, Subscription } from '@prisma/client';
 import type {
   IScannerSubscriptionRepository,
   ISubscriptionRepository,
+  ISubscriptionTagRepository,
   OutdatedSubscriber,
   RepositoryGroup,
   SubscriptionEntity,
@@ -14,7 +15,7 @@ export enum SubscriptionStatus {
 }
 
 export class SubscriptionRepository
-  implements ISubscriptionRepository, IScannerSubscriptionRepository
+  implements ISubscriptionRepository, IScannerSubscriptionRepository, ISubscriptionTagRepository
 {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -103,10 +104,10 @@ export class SubscriptionRepository
     });
   }
 
-  async updateTags(subscriberIds: string[], newTag: string): Promise<void> {
+  async advanceTag(email: string, repository: string, tag: string): Promise<void> {
     await this.prisma.subscription.updateMany({
-      where: { id: { in: subscriberIds } },
-      data: { lastSeenTag: newTag },
+      where: { email, repository },
+      data: { lastSeenTag: tag },
     });
   }
 

@@ -32,20 +32,19 @@ export class ScanBatchProcessor {
     );
 
     const results = await Promise.allSettled(
-      subscribersToNotify.map(async (sub) => {
-        await this.deps.notifier.sendReleaseNotification({
+      subscribersToNotify.map((sub) =>
+        this.deps.notifier.sendReleaseNotification({
           email: sub.email,
           repo: repoName,
           tag: newTag,
           unsubscribeToken: sub.unsubscribeToken,
-        });
-        await this.deps.repository.updateTags([sub.id], newTag);
-      }),
+        }),
+      ),
     );
 
     const failed = results.filter((r) => r.status === 'rejected').length;
     if (failed > 0) {
-      Logger.warn(`${failed}/${results.length} notifications failed for ${repoName}`);
+      Logger.warn(`${failed}/${results.length} enqueue failed for ${repoName}`);
     }
   }
 }

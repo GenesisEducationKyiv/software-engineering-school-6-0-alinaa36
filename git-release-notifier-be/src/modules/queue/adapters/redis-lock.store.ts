@@ -30,8 +30,7 @@ export class RedisLockStore implements ILockStore {
 
   private calcDynamicTTL(batchSize: number): number {
     const processingTime =
-      batchSize * LOCK_TTL.MAX_TIME_PER_REPO_SEC +
-      batchSize * 10 * LOCK_TTL.MAX_TIME_PER_EMAIL_SEC;
+      batchSize * LOCK_TTL.MAX_TIME_PER_REPO_SEC + batchSize * 10 * LOCK_TTL.MAX_TIME_PER_EMAIL_SEC;
 
     return processingTime + LOCK_TTL.SAFETY_BUFFER_SEC;
   }

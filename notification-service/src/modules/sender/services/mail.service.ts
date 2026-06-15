@@ -1,9 +1,6 @@
 import { config } from '../../../lib/config/env.config';
 import type { EmailProvider } from '../interfaces/provider.interface';
-import type {
-  INotifierService,
-  ReleaseNotificationPayload,
-} from '../interfaces/notifier.interface';
+import type { INotifierService, ReleaseNotificationPayload } from '../interfaces/notifier.interface';
 import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.template';
 
 export class NotifierService implements INotifierService {

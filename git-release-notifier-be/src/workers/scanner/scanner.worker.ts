@@ -6,6 +6,7 @@ import type { ILockStore } from '../../modules/queue/interfaces/lock-store.inter
 import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
 import type { IBatchProcessor } from './interfaces/scanner.interfaces';
 import { createWorkerContainer } from '../../composition/containers/worker.container';
+import { startDeliveredConsumer } from '../delivered/delivered.consumer';
 
 async function processMessage(
   msg: ConsumeMessage,
@@ -59,7 +60,9 @@ async function startWorker(): Promise<void> {
     deadLetterRoutingKey: QUEUE_NAME,
   });
 
-  const { processor, lockStore } = createWorkerContainer();
+  const { processor, lockStore, tagRepository } = createWorkerContainer();
+
+  await startDeliveredConsumer(tagRepository);
 
   Logger.info('[Worker] Started and ready for work...');
 

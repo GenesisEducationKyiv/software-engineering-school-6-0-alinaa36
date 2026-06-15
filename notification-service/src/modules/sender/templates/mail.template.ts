@@ -14,14 +14,14 @@ export const getReleaseEmailTemplate = (
         <p style="margin: 10px 0 0 0; font-size: 18px; color: #0366d6;">🏷️ <strong>Тег:</strong> ${tagName}</p>
       </div>
       <div style="text-align: center;">
-        <a href="https://github.com/${repoName}/releases/tag/${tagName}" 
+        <a href="https://github.com/${repoName}/releases/tag/${tagName}"
            style="display: inline-block; background-color: #2ea44f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
           Переглянути на GitHub
         </a>
       </div>
-      
+
       <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 30px 0;">
-      
+
       <p style="font-size: 12px; color: #6a737d; text-align: center;">
         Ви отримали цей лист, бо підписалися на оновлення через Git Release Notifier.
         <br><br>
@@ -44,13 +44,13 @@ export const getConfirmationEmailTemplate = (repoName: string, confirmUrl: strin
         Щоб почати отримувати сповіщення про нові релізи, будь ласка, підтвердіть свою електронну адресу, натиснувши на кнопку нижче:
       </p>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${confirmUrl}" 
+        <a href="${confirmUrl}"
            style="display: inline-block; background-color: #2ea44f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
           Підтвердити підписку
         </a>
       </div>
       <p style="margin-top: 30px; font-size: 12px; color: #6a737d;">
-        Якщо ви не робили цей запит, просто проігноруйте цей лист. 
+        Якщо ви не робили цей запит, просто проігноруйте цей лист.
         <br>Посилання дійсне для одноразового використання.
       </p>
     </div>

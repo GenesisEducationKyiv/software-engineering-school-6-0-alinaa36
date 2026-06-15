@@ -3,9 +3,9 @@ import { redis } from '../lib/redis/redis';
 import { GithubClient } from '../modules/github/client/github.client';
 import { CachedGithubClient } from '../modules/github/decorators/cached-github.decorator';
 import { RedisCacheRepository } from '../modules/common/cache/cache.repository';
-import { NotifierService } from '../modules/sender/services/mail.service';
-import { SmtpProvider } from '../modules/sender/mail.provider';
-import { MeteredNotifierService } from '../modules/sender/decorators/notifier.service.metered';
+import { QueueNotifier } from '../modules/sender/adapters/queue-notifier';
+import { RabbitEmailQueue } from '../modules/sender/adapters/rabbit-email-queue';
+import type { INotifierService } from '../modules/sender/interfaces/notifier.interface';
 
 export function createCachedGithubClient(ttlSeconds: number): CachedGithubClient {
   return new CachedGithubClient(
@@ -15,6 +15,6 @@ export function createCachedGithubClient(ttlSeconds: number): CachedGithubClient
   );
 }
 
-export function createNotifier(): MeteredNotifierService {
-  return new MeteredNotifierService(new NotifierService(new SmtpProvider()));
+export function createNotifier(): INotifierService {
+  return new QueueNotifier(new RabbitEmailQueue());
 }

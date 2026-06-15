@@ -1,0 +1,22 @@
+{
+  "name": "@grn/contracts",
+  "version": "1.0.0",
+  "description": "Shared inter-service messaging contract (email queue schema + queue names)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "type:check": "tsc --noEmit",
+    "prepare": "tsc"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}

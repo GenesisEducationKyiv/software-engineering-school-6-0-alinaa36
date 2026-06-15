@@ -6,7 +6,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { randomUUID } from 'crypto';
 
-vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),
@@ -14,15 +14,6 @@ vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
       close: vi.fn(),
     }),
   }),
-}));
-
-vi.mock('nodemailer', () => ({
-  default: {
-    createTransport: vi.fn().mockReturnValue({
-      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
-    }),
-    getTestMessageUrl: vi.fn().mockReturnValue('http://test-url'),
-  },
 }));
 
 // ---- constants ----
