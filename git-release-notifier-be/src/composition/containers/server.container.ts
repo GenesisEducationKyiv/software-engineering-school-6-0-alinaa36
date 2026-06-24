@@ -12,23 +12,32 @@ import { RedisLockStore } from '../../modules/queue/adapters/redis-lock.store';
 import { GitHubRepoProviderAdapter } from '../../modules/subscriptions/adapters/git-hub-provider.adapter';
 import { SubscriptionRepository } from '../../modules/subscriptions/repositories/subscription.repository';
 import { SubscriptionService } from '../../modules/subscriptions/services/subscription.service';
-import { createCachedGithubClient, createNotifier } from '../factories';
+import type { SubscribeSaga } from '../../modules/saga/orchestrator/subscribe.saga';
+import { SagaTimeoutScheduler } from '../../modules/saga/scheduler/saga-timeout.scheduler';
+import { CONFIRMATION_TIMEOUT_MS } from '../../modules/saga/constants/saga.constants';
+import { createCachedGithubClient, createSubscribeSaga } from '../factories';
 
 export type ServerContainer = {
   subscriptionService: SubscriptionService;
   schedulerService: SchedulerService;
+  subscribeSaga: SubscribeSaga;
+  sagaTimeoutScheduler: SagaTimeoutScheduler;
 };
 
 export function createServerContainer(): ServerContainer {
   const githubClient = createCachedGithubClient(REDIS_CACHE_TTL_SECONDS);
-  const notifier = createNotifier();
   const subscriptionRepository = new SubscriptionRepository(prisma);
+  const subscribeSaga = createSubscribeSaga(subscriptionRepository);
+  const sagaTimeoutScheduler = new SagaTimeoutScheduler(
+    cronScheduler,
+    subscribeSaga,
+    CONFIRMATION_TIMEOUT_MS,
+  );
 
   const subscriptionService = new SubscriptionService(
     subscriptionRepository,
     new GitHubRepoProviderAdapter(githubClient),
-
-    notifier,
+    subscribeSaga,
   );
 
   const lockStore = new RedisLockStore(redis);
@@ -37,5 +46,5 @@ export function createServerContainer(): ServerContainer {
   const schedulerService = new SchedulerService(subscriptionRepository, cronScheduler, jobQueue);
   registerActiveSubscriptionsGauge(() => subscriptionRepository.countActive());
 
-  return { subscriptionService, schedulerService };
+  return { subscriptionService, schedulerService, subscribeSaga, sagaTimeoutScheduler };
 }

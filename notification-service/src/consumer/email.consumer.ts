@@ -19,6 +19,8 @@ import type { IIdempotencyStore } from "../modules/sender/interfaces/idempotency
 import { RedisIdempotencyStore } from "../modules/sender/adapters/redis-idempotency.store";
 import type { IDeliveredPublisher } from "../modules/sender/interfaces/delivered-publisher.interface";
 import { RabbitDeliveredPublisher } from "../modules/sender/adapters/rabbit-delivered-publisher";
+import type { IConfirmationReplyPublisher } from "../modules/sender/interfaces/confirmation-reply-publisher.interface";
+import { RabbitConfirmationReplyPublisher } from "../modules/sender/adapters/rabbit-confirmation-reply.publisher";
 import { redis } from "../lib/redis/redis";
 
 const notifier: INotifierService = new MeteredNotifierService(
@@ -31,6 +33,9 @@ const idempotency: IIdempotencyStore = new RedisIdempotencyStore(
 );
 
 const deliveredPublisher: IDeliveredPublisher = new RabbitDeliveredPublisher();
+
+const replyPublisher: IConfirmationReplyPublisher =
+  new RabbitConfirmationReplyPublisher();
 
 let channel: Channel | null = null;
 let consumerTag: string | null = null;
@@ -69,13 +74,43 @@ async function deliver(message: EmailMessage): Promise<void> {
 }
 
 async function confirmDelivery(message: EmailMessage): Promise<void> {
-  if (message.type !== "release") return;
+  if (message.type === "release") {
+    await deliveredPublisher.publish({
+      email: message.email,
+      repo: message.repo,
+      tag: message.tag,
+    });
 
-  await deliveredPublisher.publish({
-    email: message.email,
-    repo: message.repo,
-    tag: message.tag,
-  });
+    return;
+  }
+
+  if (message.sagaId) {
+    await replyPublisher.publish({ sagaId: message.sagaId, status: "SENT" });
+  }
+}
+
+async function publishSagaFailure(
+  message: EmailMessage,
+  error: unknown,
+): Promise<void> {
+  if (message.type !== "confirmation" || !message.sagaId) return;
+
+  try {
+    await replyPublisher.publish({
+      sagaId: message.sagaId,
+      status: "FAILED",
+      reason: error instanceof Error ? error.message : "delivery failed",
+    });
+    Logger.warn(
+      { sagaId: message.sagaId },
+      "[Consumer] Confirmation permanently failed, saga compensation requested",
+    );
+  } catch (err) {
+    Logger.error(
+      { err, sagaId: message.sagaId },
+      "[Consumer] Failed to publish saga failure reply",
+    );
+  }
 }
 
 async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
@@ -133,7 +168,11 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
       { err: error, type: message.type },
       "[Consumer] Delivery failed",
     );
-    handleRetry(msg, ch);
+    const deadLettered = handleRetry(msg, ch);
+
+    if (deadLettered) {
+      await publishSagaFailure(message, error);
+    }
 
     return;
   }

@@ -19,7 +19,7 @@ import type {
   RepositoryGroup,
 } from '../interfaces/subscription-repository.interface';
 import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
-import type { INotifierService } from '../../sender/interfaces/notifier.interface';
+import type { ISubscribeSaga } from '../../saga/interfaces/subscribe-saga.interface';
 
 // ---- helpers ----
 
@@ -43,10 +43,9 @@ function makeRepoProvider(): Mocked<IRepositoryProvider> {
   };
 }
 
-function makeNotifier(): Mocked<INotifierService> {
+function makeSubscribeSaga(): Mocked<ISubscribeSaga> {
   return {
-    sendConfirmationEmail: vi.fn().mockResolvedValue(undefined),
-    sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
+    start: vi.fn(),
   };
 }
 
@@ -67,10 +66,10 @@ function makeSubscription(overrides: Partial<SubscriptionEntity> = {}): Subscrip
 function makeService() {
   const repository = makeRepository();
   const repoProvider = makeRepoProvider();
-  const notifier = makeNotifier();
-  const service = new SubscriptionService(repository, repoProvider, notifier);
+  const subscribeSaga = makeSubscribeSaga();
+  const service = new SubscriptionService(repository, repoProvider, subscribeSaga);
 
-  return { service, repository, repoProvider, notifier };
+  return { service, repository, repoProvider, subscribeSaga };
 }
 
 // ---- тести ----
@@ -82,44 +81,30 @@ describe('SubscriptionService', () => {
 
   describe('subscribeToRepo', () => {
     it('перевіряє існування репозиторію на GitHub', async () => {
-      const { service, repository, repoProvider } = makeService();
+      const { service, repository, repoProvider, subscribeSaga } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(false);
-      repository.upsertPending.mockResolvedValue(makeSubscription());
+      subscribeSaga.start.mockResolvedValue(makeSubscription());
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
 
       expect(repoProvider.exists).toHaveBeenCalledWith('user/repo');
     });
 
-    it('зберігає підписку в базі даних', async () => {
-      const { service, repository } = makeService();
+    it('делегує запуск саги з email та репозиторієм', async () => {
+      const { service, repository, subscribeSaga } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(false);
-      repository.upsertPending.mockResolvedValue(makeSubscription());
+      subscribeSaga.start.mockResolvedValue(makeSubscription());
 
       await service.subscribeToRepo('user@example.com', 'user/repo');
 
-      expect(repository.upsertPending).toHaveBeenCalledWith('user@example.com', 'user/repo');
+      expect(subscribeSaga.start).toHaveBeenCalledWith('user@example.com', 'user/repo');
     });
 
-    it('надсилає confirmation email з токеном', async () => {
-      const { service, repository, notifier } = makeService();
-      repository.checkIfActiveExists.mockResolvedValue(false);
-      repository.upsertPending.mockResolvedValue(makeSubscription({ confirmToken: 'confirm-tok' }));
-
-      await service.subscribeToRepo('user@example.com', 'user/repo');
-
-      expect(notifier.sendConfirmationEmail).toHaveBeenCalledWith(
-        'user@example.com',
-        'user/repo',
-        'confirm-tok',
-      );
-    });
-
-    it('повертає створену підписку', async () => {
-      const { service, repository } = makeService();
+    it('повертає підписку, створену сагою', async () => {
+      const { service, repository, subscribeSaga } = makeService();
       const subscription = makeSubscription();
       repository.checkIfActiveExists.mockResolvedValue(false);
-      repository.upsertPending.mockResolvedValue(subscription);
+      subscribeSaga.start.mockResolvedValue(subscription);
 
       const result = await service.subscribeToRepo('user@example.com', 'user/repo');
 
@@ -135,13 +120,13 @@ describe('SubscriptionService', () => {
       );
     });
 
-    it('не зберігає підписку якщо активна вже існує', async () => {
-      const { service, repository } = makeService();
+    it('не запускає сагу якщо активна підписка вже існує', async () => {
+      const { service, repository, subscribeSaga } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(true);
 
       await service.subscribeToRepo('user@example.com', 'user/repo').catch(() => {});
 
-      expect(repository.upsertPending).not.toHaveBeenCalled();
+      expect(subscribeSaga.start).not.toHaveBeenCalled();
     });
 
     it('кидає NotFoundError якщо репозиторій не знайдено на GitHub', async () => {
@@ -154,20 +139,20 @@ describe('SubscriptionService', () => {
       ).rejects.toThrow(NotFoundError);
     });
 
-    it('не зберігає підписку якщо репозиторій не знайдено на GitHub', async () => {
-      const { service, repository, repoProvider } = makeService();
+    it('не запускає сагу якщо репозиторій не знайдено на GitHub', async () => {
+      const { service, repository, repoProvider, subscribeSaga } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(false);
       repoProvider.exists.mockResolvedValue(false);
 
       await service.subscribeToRepo('user@example.com', 'user/invalid-repo').catch(() => {});
 
-      expect(repository.upsertPending).not.toHaveBeenCalled();
+      expect(subscribeSaga.start).not.toHaveBeenCalled();
     });
 
-    it('пробрасовує помилку якщо база даних кинула виняток', async () => {
-      const { service, repository } = makeService();
+    it('пробрасовує помилку якщо сага кинула виняток', async () => {
+      const { service, repository, subscribeSaga } = makeService();
       repository.checkIfActiveExists.mockResolvedValue(false);
-      repository.upsertPending.mockRejectedValue(new Error('DB error'));
+      subscribeSaga.start.mockRejectedValue(new Error('DB error'));
 
       await expect(service.subscribeToRepo('user@example.com', 'user/repo')).rejects.toThrow(
         'DB error',
