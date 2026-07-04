@@ -1,11 +1,13 @@
 import { Logger } from './lib/logger/logger';
 import { startEmailConsumer, stopEmailConsumer } from './consumer/email.consumer';
 import { startMetricsServer } from './lib/metrics/metrics.server';
+import { startNotificationGrpcServer } from './grpc/notification.grpc-server';
 import { closeRabbitConnection } from './lib/rabbit/rabbit.connection';
 import { closeRedis } from './lib/redis/redis';
 
 async function main(): Promise<void> {
   const metricsServer = startMetricsServer();
+  const grpcServer = startNotificationGrpcServer();
   await startEmailConsumer();
 
   let shuttingDown = false;
@@ -16,6 +18,7 @@ async function main(): Promise<void> {
     Logger.info({ signal }, '[notification-service] Shutting down');
 
     await stopEmailConsumer();
+    await new Promise<void>((resolve) => grpcServer.tryShutdown(() => resolve()));
     await closeRabbitConnection();
     await closeRedis();
     await new Promise<void>((resolve) => metricsServer.close(() => resolve()));

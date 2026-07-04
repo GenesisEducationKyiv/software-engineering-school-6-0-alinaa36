@@ -20,9 +20,9 @@ export type WorkerContainer = {
 
 export function createWorkerContainer(): WorkerContainer {
   const githubClient = new GithubClient(config.github.token);
-  const notifier = createNotifier();
   const lockStore = new RedisLockStore(redis);
   const subscriptionRepository = new SubscriptionRepository(prisma);
+  const notifier = createNotifier(subscriptionRepository);
 
   const processor = new MeteredScanBatchProcessor(
     new ScanBatchProcessor({

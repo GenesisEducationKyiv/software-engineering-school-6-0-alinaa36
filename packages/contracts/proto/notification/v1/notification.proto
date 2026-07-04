@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package notification.v1;
+
+service NotificationService {
+  rpc SendReleaseNotification(SendReleaseNotificationRequest)
+      returns (SendReleaseNotificationResponse);
+}
+
+message SendReleaseNotificationRequest {
+  string email = 1;
+  string repo = 2;
+  string tag = 3;
+  string unsubscribe_token = 4;
+  string idempotency_key = 5;
+}
+
+message SendReleaseNotificationResponse {
+  DeliveryStatus status = 1;
+  string message = 2;
+}
+
+enum DeliveryStatus {
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  DELIVERY_STATUS_SENT = 1;
+  DELIVERY_STATUS_DUPLICATE = 2;
+}
