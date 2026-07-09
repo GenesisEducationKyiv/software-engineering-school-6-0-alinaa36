@@ -6,7 +6,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { REDIS_CACHE_TTL_SECONDS } from '../../modules/common/constants/api.constants';
 
-vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),

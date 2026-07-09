@@ -8,14 +8,14 @@ test.describe('Відписка', () => {
     waitForDbState,
   }) => {
     // Arrange
-    const sub = await createActiveSubscription({ repository: 'facebook/react' });
+    const sub = await createActiveSubscription({ repository: 'react/react' });
 
     // Act
     await page.goto(`/api/unsubscribe/${sub.unsubscribeToken}`);
 
     // Assert — UI
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
-    await expect(page.getByTestId('repo-name')).toContainText('facebook/react');
+    await expect(page.getByTestId('repo-name')).toContainText('react/react');
 
     // Assert — БД
     await waitForDbState(async () => {
@@ -38,7 +38,7 @@ test.describe('Відписка', () => {
     // Arrange
     const sub1 = await createActiveSubscription({
       email: uniqueEmail,
-      repository: 'facebook/react',
+      repository: 'react/react',
       confirmToken: `confirm-1-${Date.now()}`,
       unsubscribeToken: `unsub-1-${Date.now()}`,
     });

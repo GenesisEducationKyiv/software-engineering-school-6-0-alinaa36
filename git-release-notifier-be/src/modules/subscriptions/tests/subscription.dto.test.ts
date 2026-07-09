@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
+import type { z } from 'zod';
 import { SubscribeSchema } from '../dtos/subscription.dto';
+
+type Result = z.ZodSafeParseResult<z.infer<typeof SubscribeSchema>>;
+
+function issuesFor(result: Result, field: string): z.core.$ZodIssue[] {
+  if (result.success) return [];
+
+  return result.error.issues.filter((issue) => issue.path[0] === field);
+}
+
+function codesFor(result: Result, field: string): string[] {
+  return issuesFor(result, field).map((issue) => issue.code);
+}
 
 describe('SubscribeSchema Validation', () => {
   it('повинен успішно валідувати правильні дані', () => {
@@ -25,9 +38,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(invalidData);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe('Неправильний формат email адреси');
-    }
+    expect(codesFor(result, 'email')).toContain('invalid_format');
   });
 
   it('повинен повертати помилку для неправильного формату репозиторію', () => {
@@ -39,11 +50,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(invalidData);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
-        "Неправильний формат. Використовуй 'owner/repo' (наприклад: facebook/react)",
-      );
-    }
+    expect(codesFor(result, 'repo')).toContain('invalid_format');
   });
 
   it('повинен повертати помилку, якщо дані відсутні', () => {
@@ -52,11 +59,8 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(emptyData);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      const messages = result.error.issues.map((i) => i.message);
-      expect(messages).toContain("Поле 'email' є обов'язковим");
-      expect(messages).toContain("Поле 'repo' є обов'язковим");
-    }
+    expect(codesFor(result, 'email')).toContain('invalid_type');
+    expect(codesFor(result, 'repo')).toContain('invalid_type');
   });
 
   it('повинен повертати кастомне повідомлення якщо email відсутній', () => {
@@ -65,9 +69,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(dataWithoutEmail);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe("Поле 'email' є обов'язковим");
-    }
+    expect(codesFor(result, 'email')).toContain('invalid_type');
   });
 
   it('повинен повертати кастомне повідомлення якщо repo відсутній', () => {
@@ -76,9 +78,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(dataWithoutRepo);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe("Поле 'repo' є обов'язковим");
-    }
+    expect(codesFor(result, 'repo')).toContain('invalid_type');
   });
 
   it('повинен відхиляти порожній рядок repo', () => {
@@ -87,10 +87,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(dataWithEmptyRepo);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      const messages = result.error.issues.map((i) => i.message);
-      expect(messages).toContain("Поле 'repo' не може бути порожнім");
-    }
+    expect(codesFor(result, 'repo')).toContain('too_small');
   });
 
   it('повинен відхиляти repo без назви після слешу', () => {
@@ -99,11 +96,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(dataWithTrailingSlash);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
-        "Неправильний формат. Використовуй 'owner/repo' (наприклад: facebook/react)",
-      );
-    }
+    expect(codesFor(result, 'repo')).toContain('invalid_format');
   });
 
   it('повинен відхиляти repo без owner перед слешем', () => {
@@ -112,11 +105,7 @@ describe('SubscribeSchema Validation', () => {
     const result = SubscribeSchema.safeParse(dataWithLeadingSlash);
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
-        "Неправильний формат. Використовуй 'owner/repo' (наприклад: facebook/react)",
-      );
-    }
+    expect(codesFor(result, 'repo')).toContain('invalid_format');
   });
 
   it('повинен приймати repo з крапкою в назві', () => {

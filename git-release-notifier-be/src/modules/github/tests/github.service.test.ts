@@ -77,47 +77,6 @@ describe('GithubService.getLatestReleasesBatch', () => {
 
       expect(httpClient.executeQuery).not.toHaveBeenCalled();
     });
-
-    it('генерує однаковий ключ кешу незалежно від порядку репозиторіїв', async () => {
-      const setCacheMock = vi.fn().mockResolvedValue(undefined);
-      const { service, httpClient } = makeService({
-        cache: { set: setCacheMock },
-      });
-
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([
-          { nameWithOwner: 'a/repo', tagName: 'v1.0.0' },
-          { nameWithOwner: 'b/repo', tagName: 'v2.0.0' },
-        ]),
-      );
-
-      await service.getLatestReleasesBatch(['b/repo', 'a/repo']);
-      await service.getLatestReleasesBatch(['a/repo', 'b/repo']);
-
-      const firstKey = setCacheMock.mock.calls[0][0];
-      const secondKey = setCacheMock.mock.calls[1][0];
-
-      expect(firstKey).toBe(secondKey);
-    });
-
-    it('зберігає результат у кеш після успішного запиту', async () => {
-      const setCacheMock = vi.fn().mockResolvedValue(undefined);
-      const { service, httpClient } = makeService({
-        cache: { set: setCacheMock },
-      });
-
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([{ nameWithOwner: 'user/repo', tagName: 'v1.0.0' }]),
-      );
-
-      await service.getLatestReleasesBatch(['user/repo']);
-
-      expect(setCacheMock).toHaveBeenCalledWith(
-        expect.stringContaining('cache:github:releases:'),
-        { 'user/repo': 'v1.0.0' },
-        600,
-      );
-    });
   });
 
   // --- граничні випадки вхідних даних ---

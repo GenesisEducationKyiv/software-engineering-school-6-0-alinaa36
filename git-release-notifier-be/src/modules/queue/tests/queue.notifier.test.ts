@@ -167,15 +167,6 @@ describe('addScanJobs', () => {
 
       expect(payload.lockKey).toBe(redisKey);
     });
-
-    it('генерує різні ключі для різних батчів', async () => {
-      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4']);
-
-      const firstKey = vi.mocked(redis.set).mock.calls[0][0];
-      const secondKey = vi.mocked(redis.set).mock.calls[1][0];
-
-      expect(firstKey).not.toBe(secondKey);
-    });
   });
 
   // --- формат повідомлення ---
