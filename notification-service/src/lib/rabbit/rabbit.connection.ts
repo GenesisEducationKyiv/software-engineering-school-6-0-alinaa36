@@ -3,39 +3,52 @@ import amqp from 'amqplib';
 import { Logger } from '../logger/logger';
 import { config } from '../config/env.config';
 
-let connection: ChannelModel | null = null;
+let connectionPromise: Promise<ChannelModel> | null = null;
 let closing = false;
 
-export async function getRabbitConnection(): Promise<ChannelModel> {
-  if (connection) {
-    return connection;
-  }
-
+async function connect(): Promise<ChannelModel> {
   const conn = await amqp.connect(config.rabbit.url);
   Logger.info('[RabbitMQ] Connection established.');
 
   conn.on('error', (err) => {
     Logger.error({ err }, '[RabbitMQ] Connection error');
-    connection = null;
   });
 
   conn.on('close', () => {
-    connection = null;
+    connectionPromise = null;
     if (!closing) {
       Logger.warn('[RabbitMQ] Connection closed');
     }
   });
 
-  connection = conn;
+  return conn;
+}
 
-  return connection;
+export function getRabbitConnection(): Promise<ChannelModel> {
+  if (!connectionPromise) {
+    connectionPromise = connect().catch((err: unknown) => {
+      connectionPromise = null;
+      throw err;
+    });
+  }
+
+  return connectionPromise;
 }
 
 export async function closeRabbitConnection(): Promise<void> {
   closing = true;
 
-  if (connection) {
-    await connection.close();
-    connection = null;
+  if (!connectionPromise) {
+    return;
+  }
+
+  const pending = connectionPromise;
+  connectionPromise = null;
+
+  try {
+    const conn = await pending;
+    await conn.close();
+  } catch (err) {
+    Logger.error({ err }, '[RabbitMQ] Error while closing connection');
   }
 }

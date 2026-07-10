@@ -85,6 +85,7 @@ export class SubscriptionRepository
       by: ['repository'],
       where: { status: SubscriptionStatus.ACTIVE },
       _count: { repository: true },
+      orderBy: { repository: 'asc' },
     });
 
     return rows.map((row) => ({

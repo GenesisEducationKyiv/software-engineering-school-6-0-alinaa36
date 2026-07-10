@@ -1,26 +1,49 @@
+import type { ConfirmChannel } from 'amqplib';
 import type { EmailMessage } from '@grn/contracts';
 import { EMAIL_QUEUE_NAME } from '@grn/contracts';
 import type { IEmailQueue } from '../interfaces/email-queue.interface';
 import { getRabbitConnection } from '../../../lib/rabbit/rabbit.connection';
 
 export class RabbitEmailQueue implements IEmailQueue {
+  private channelPromise: Promise<ConfirmChannel> | null = null;
+
   async publish(msg: EmailMessage): Promise<void> {
+    const channel = await this.getChannel();
+
+    await new Promise<void>((resolve, reject) => {
+      channel.sendToQueue(
+        EMAIL_QUEUE_NAME,
+        Buffer.from(JSON.stringify(msg)),
+        { persistent: true },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+  }
+
+  private getChannel(): Promise<ConfirmChannel> {
+    if (!this.channelPromise) {
+      this.channelPromise = this.createChannel().catch((err: unknown) => {
+        this.channelPromise = null;
+        throw err;
+      });
+    }
+
+    return this.channelPromise;
+  }
+
+  private async createChannel(): Promise<ConfirmChannel> {
     const connection = await getRabbitConnection();
     const channel = await connection.createConfirmChannel();
 
-    try {
-      await channel.assertQueue(EMAIL_QUEUE_NAME, { durable: true });
+    await channel.assertQueue(EMAIL_QUEUE_NAME, { durable: true });
 
-      await new Promise<void>((resolve, reject) => {
-        channel.sendToQueue(
-          EMAIL_QUEUE_NAME,
-          Buffer.from(JSON.stringify(msg)),
-          { persistent: true },
-          (err) => (err ? reject(err) : resolve()),
-        );
-      });
-    } finally {
-      await channel.close();
-    }
+    channel.on('error', () => {
+      this.channelPromise = null;
+    });
+    channel.on('close', () => {
+      this.channelPromise = null;
+    });
+
+    return channel;
   }
 }
