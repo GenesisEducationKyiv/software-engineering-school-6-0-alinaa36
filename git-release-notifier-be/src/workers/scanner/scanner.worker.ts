@@ -31,17 +31,23 @@ async function processMessage(
   try {
     await processor.process(repos);
     channel.ack(msg);
-
-    if (lockKey) {
-      await lockStore.unlock(lockKey);
-    }
-
-    await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
-    Logger.info('[Worker] Batch processed successfully.');
   } catch (error) {
     Logger.error({ err: error }, '[Worker] Processing error');
     await handleRetry(msg, channel);
+
+    return;
   }
+
+  if (lockKey) {
+    try {
+      await lockStore.unlock(lockKey);
+    } catch (err) {
+      Logger.warn({ err, lockKey }, '[Worker] Failed to release lock, will expire via TTL');
+    }
+  }
+
+  await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
+  Logger.info('[Worker] Batch processed successfully.');
 }
 
 async function startWorker(): Promise<void> {
