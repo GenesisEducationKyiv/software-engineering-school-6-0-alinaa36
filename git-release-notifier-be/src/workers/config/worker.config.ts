@@ -4,5 +4,7 @@ export const WorkerConfig = {
 
   RATE_LIMIT_DELAY_MS: 1_000,
 
+  RECONNECT_DELAY_MS: 5_000,
+
   BATCH_SIZE: 50,
 } as const;
