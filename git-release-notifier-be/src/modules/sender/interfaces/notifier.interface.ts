@@ -7,5 +7,4 @@ export interface ReleaseNotificationPayload {
 
 export interface INotifierService {
   sendReleaseNotification(payload: ReleaseNotificationPayload): Promise<void>;
-  sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void>;
 }

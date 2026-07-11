@@ -19,6 +19,7 @@ export interface SagaRecord {
 export interface ISagaRepository {
   create(type: string, payload: SagaPayload): Promise<SagaRecord>;
   findById(id: string): Promise<SagaRecord | null>;
-  findStuck(state: SagaState, olderThan: Date): Promise<SagaRecord[]>;
+  findStuck(states: SagaState[], olderThan: Date): Promise<SagaRecord[]>;
   updateState(id: string, state: SagaState, lastError?: string): Promise<void>;
+  transition(id: string, from: SagaState[], to: SagaState, lastError?: string): Promise<boolean>;
 }

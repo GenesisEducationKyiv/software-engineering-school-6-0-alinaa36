@@ -46,8 +46,15 @@ export class SubscribeSaga implements ISubscribeSaga {
     }
 
     if (reply.status === 'SENT') {
-      await this.sagaRepository.updateState(saga.id, SagaState.COMPLETED);
-      Logger.info({ sagaId: saga.id }, '[Saga] Subscribe saga completed');
+      const completed = await this.sagaRepository.transition(
+        saga.id,
+        [SagaState.AWAITING_EMAIL],
+        SagaState.COMPLETED,
+      );
+
+      if (completed) {
+        Logger.info({ sagaId: saga.id }, '[Saga] Subscribe saga completed');
+      }
 
       return;
     }
@@ -57,7 +64,10 @@ export class SubscribeSaga implements ISubscribeSaga {
 
   async compensateStuck(timeoutMs: number): Promise<void> {
     const threshold = new Date(Date.now() - timeoutMs);
-    const stuck = await this.sagaRepository.findStuck(SagaState.AWAITING_EMAIL, threshold);
+    const stuck = await this.sagaRepository.findStuck(
+      [SagaState.STARTED, SagaState.AWAITING_EMAIL],
+      threshold,
+    );
 
     for (const saga of stuck) {
       Logger.warn({ sagaId: saga.id }, '[Saga] Confirmation reply timed out, compensating');
@@ -66,7 +76,17 @@ export class SubscribeSaga implements ISubscribeSaga {
   }
 
   private async compensate(saga: SagaRecord, reason?: string): Promise<void> {
-    await this.sagaRepository.updateState(saga.id, SagaState.COMPENSATING, reason);
+    const claimed = await this.sagaRepository.transition(
+      saga.id,
+      [SagaState.STARTED, SagaState.AWAITING_EMAIL],
+      SagaState.COMPENSATING,
+      reason,
+    );
+
+    if (!claimed) {
+      return;
+    }
+
     await this.removePendingSubscription(saga.payload.subscriptionId);
     await this.sagaRepository.updateState(saga.id, SagaState.COMPENSATED, reason);
     Logger.warn({ sagaId: saga.id, reason }, '[Saga] Subscribe saga compensated');
@@ -74,7 +94,14 @@ export class SubscribeSaga implements ISubscribeSaga {
 
   private async removePendingSubscription(subscriptionId: string): Promise<void> {
     try {
-      await this.subscriptionRepository.delete(subscriptionId);
+      const deleted = await this.subscriptionRepository.deleteIfPending(subscriptionId);
+
+      if (!deleted) {
+        Logger.info(
+          { subscriptionId },
+          '[Saga] Subscription no longer pending, skipping compensation delete',
+        );
+      }
     } catch (err) {
       Logger.error(
         { err, subscriptionId },

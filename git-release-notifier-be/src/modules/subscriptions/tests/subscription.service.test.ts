@@ -30,6 +30,7 @@ function makeRepository(): Mocked<ISubscriptionRepository> {
     findByUnsubscribeToken: vi.fn(),
     activate: vi.fn(),
     delete: vi.fn(),
+    deleteIfPending: vi.fn(),
     findByEmail: vi.fn(),
     groupByRepository: vi.fn(),
     countActive: vi.fn(),

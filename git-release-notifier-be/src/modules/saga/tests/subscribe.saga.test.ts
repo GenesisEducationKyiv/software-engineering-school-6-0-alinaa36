@@ -28,6 +28,7 @@ function makeSagaRepository(): Mocked<ISagaRepository> {
     findById: vi.fn(),
     findStuck: vi.fn(),
     updateState: vi.fn().mockResolvedValue(undefined),
+    transition: vi.fn().mockResolvedValue(true),
   };
 }
 
@@ -39,6 +40,7 @@ function makeSubscriptionRepository(): Mocked<ISubscriptionRepository> {
     activate: vi.fn(),
     findByUnsubscribeToken: vi.fn(),
     delete: vi.fn().mockResolvedValue(undefined),
+    deleteIfPending: vi.fn().mockResolvedValue(true),
     findByEmail: vi.fn(),
     countActive: vi.fn(),
     groupByRepository: vi.fn(),
@@ -165,8 +167,22 @@ describe('SubscribeSaga', () => {
 
       await saga.onReply({ sagaId: 'saga-1', status: 'SENT' });
 
-      expect(sagaRepo.updateState).toHaveBeenCalledWith('saga-1', SagaState.COMPLETED);
-      expect(subscriptionRepo.delete).not.toHaveBeenCalled();
+      expect(sagaRepo.transition).toHaveBeenCalledWith(
+        'saga-1',
+        [SagaState.AWAITING_EMAIL],
+        SagaState.COMPLETED,
+      );
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
+    });
+
+    it('не логує завершення якщо перехід у COMPLETED програв гонку', async () => {
+      const { saga, sagaRepo, subscriptionRepo } = makeSaga();
+      sagaRepo.findById.mockResolvedValue(makeSagaRecord({ id: 'saga-1' }));
+      sagaRepo.transition.mockResolvedValue(false);
+
+      await saga.onReply({ sagaId: 'saga-1', status: 'SENT' });
+
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
     });
 
     it('компенсує сагу при статусі FAILED', async () => {
@@ -177,8 +193,27 @@ describe('SubscribeSaga', () => {
 
       await saga.onReply({ sagaId: 'saga-1', status: 'FAILED', reason: 'smtp down' });
 
-      expect(subscriptionRepo.delete).toHaveBeenCalledWith('sub-5');
+      expect(sagaRepo.transition).toHaveBeenCalledWith(
+        'saga-1',
+        [SagaState.STARTED, SagaState.AWAITING_EMAIL],
+        SagaState.COMPENSATING,
+        'smtp down',
+      );
+      expect(subscriptionRepo.deleteIfPending).toHaveBeenCalledWith('sub-5');
       expect(sagaRepo.updateState).toHaveBeenCalledWith('saga-1', SagaState.COMPENSATED, 'smtp down');
+    });
+
+    it('не видаляє підписку якщо компенсацію перехопив інший процес', async () => {
+      const { saga, sagaRepo, subscriptionRepo } = makeSaga();
+      sagaRepo.findById.mockResolvedValue(
+        makeSagaRecord({ id: 'saga-1', payload: { subscriptionId: 'sub-5', email: 'a@b.c', repo: 'a/b' } }),
+      );
+      sagaRepo.transition.mockResolvedValue(false);
+
+      await saga.onReply({ sagaId: 'saga-1', status: 'FAILED', reason: 'smtp down' });
+
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
+      expect(sagaRepo.updateState).not.toHaveBeenCalled();
     });
 
     it('ігнорує відповідь якщо сага не існує', async () => {
@@ -188,7 +223,7 @@ describe('SubscribeSaga', () => {
       await saga.onReply({ sagaId: 'missing', status: 'SENT' });
 
       expect(sagaRepo.updateState).not.toHaveBeenCalled();
-      expect(subscriptionRepo.delete).not.toHaveBeenCalled();
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
     });
 
     it('ігнорує відповідь якщо сага вже не в стані AWAITING_EMAIL', async () => {
@@ -198,7 +233,7 @@ describe('SubscribeSaga', () => {
       await saga.onReply({ sagaId: 'saga-1', status: 'SENT' });
 
       expect(sagaRepo.updateState).not.toHaveBeenCalled();
-      expect(subscriptionRepo.delete).not.toHaveBeenCalled();
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
     });
   });
 
@@ -211,11 +246,23 @@ describe('SubscribeSaga', () => {
 
       await saga.compensateStuck(120_000);
 
-      expect(subscriptionRepo.delete).toHaveBeenCalledWith('sub-9');
+      expect(subscriptionRepo.deleteIfPending).toHaveBeenCalledWith('sub-9');
       expect(sagaRepo.updateState).toHaveBeenCalledWith(
         'saga-1',
         SagaState.COMPENSATED,
         'confirmation reply timed out',
+      );
+    });
+
+    it('підбирає саги застряглі як у STARTED, так і в AWAITING_EMAIL', async () => {
+      const { saga, sagaRepo } = makeSaga();
+      sagaRepo.findStuck.mockResolvedValue([]);
+
+      await saga.compensateStuck(120_000);
+
+      expect(sagaRepo.findStuck).toHaveBeenCalledWith(
+        [SagaState.STARTED, SagaState.AWAITING_EMAIL],
+        expect.any(Date),
       );
     });
 
@@ -225,7 +272,7 @@ describe('SubscribeSaga', () => {
 
       await saga.compensateStuck(120_000);
 
-      expect(subscriptionRepo.delete).not.toHaveBeenCalled();
+      expect(subscriptionRepo.deleteIfPending).not.toHaveBeenCalled();
       expect(sagaRepo.updateState).not.toHaveBeenCalled();
     });
   });
