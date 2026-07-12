@@ -7,6 +7,7 @@ import {
   type SendReleaseNotificationResponse,
 } from '@grn/contracts';
 import type {
+  IConfirmationSender,
   INotifierService,
   ReleaseNotificationPayload,
 } from '../interfaces/notifier.interface';
@@ -20,7 +21,7 @@ export class GrpcNotifier implements INotifierService {
   constructor(
     address: string,
     private readonly tagRepository: ISubscriptionTagRepository,
-    private readonly confirmationFallback: INotifierService,
+    private readonly confirmationFallback: IConfirmationSender,
   ) {
     this.client = new NotificationServiceClient(address, credentials.createInsecure());
   }
