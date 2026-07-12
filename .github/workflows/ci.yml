@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: rm -f package-lock.json && npm install
+        run: npm ci
 
       - name: Build contracts
         working-directory: ${{ github.workspace }}
