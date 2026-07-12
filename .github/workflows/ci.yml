@@ -28,11 +28,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: rm -f package-lock.json && npm install
 
-      - name: Generate and build contracts
+      - name: Build contracts
         working-directory: ${{ github.workspace }}
-        run: |
-          npm run proto:generate -w @grn/contracts
-          npm run build:contracts
+        run: npm run build:contracts
 
       - name: Lint
         run: npm run lint
@@ -62,11 +60,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: rm -f package-lock.json && npm install
 
-      - name: Generate and build contracts
+      - name: Build contracts
         working-directory: ${{ github.workspace }}
-        run: |
-          npm run proto:generate -w @grn/contracts
-          npm run build:contracts
+        run: npm run build:contracts
 
       - name: Unit tests
         run: npm run test:unit
@@ -89,10 +85,8 @@ jobs:
       - name: Install dependencies
         run: rm -f package-lock.json && npm install
 
-      - name: Generate and build contracts
-        run: |
-          npm run proto:generate -w @grn/contracts
-          npm run build:contracts
+      - name: Build contracts
+        run: npm run build:contracts
 
       - name: Unit tests
         run: npm run test:unit -w notification-service
@@ -155,11 +149,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: rm -f package-lock.json && npm install
 
-      - name: Generate and build contracts
+      - name: Build contracts
         working-directory: ${{ github.workspace }}
-        run: |
-          npm run proto:generate -w @grn/contracts
-          npm run build:contracts
+        run: npm run build:contracts
 
       - name: Load test env
         run: cat .env.test >> $GITHUB_ENV
@@ -232,11 +224,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: rm -f package-lock.json && npm install
 
-      - name: Generate and build contracts
+      - name: Build contracts
         working-directory: ${{ github.workspace }}
-        run: |
-          npm run proto:generate -w @grn/contracts
-          npm run build:contracts
+        run: npm run build:contracts
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
