@@ -24,13 +24,11 @@ export function createCachedGithubClient(ttlSeconds: number): CachedGithubClient
 }
 
 export function createNotifier(tagRepository: ISubscriptionTagRepository): INotifierService {
-  const queueNotifier = new QueueNotifier(new RabbitEmailQueue());
-
   if (config.release.transport === 'grpc') {
-    return new GrpcNotifier(config.release.grpcUrl, tagRepository, queueNotifier);
+    return new GrpcNotifier(config.release.grpcUrl, tagRepository);
   }
 
-  return queueNotifier;
+  return new QueueNotifier(new RabbitEmailQueue());
 }
 
 export function createSubscribeSaga(

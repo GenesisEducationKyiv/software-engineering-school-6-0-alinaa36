@@ -5,10 +5,6 @@ export interface ReleaseNotificationPayload {
   unsubscribeToken: string;
 }
 
-export interface IConfirmationSender {
-  sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void>;
-}
-
-export interface INotifierService extends IConfirmationSender {
+export interface INotifierService {
   sendReleaseNotification(payload: ReleaseNotificationPayload): Promise<void>;
 }

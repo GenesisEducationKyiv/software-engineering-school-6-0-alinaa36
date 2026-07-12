@@ -7,7 +7,6 @@ import {
   type SendReleaseNotificationResponse,
 } from '@grn/contracts';
 import type {
-  IConfirmationSender,
   INotifierService,
   ReleaseNotificationPayload,
 } from '../interfaces/notifier.interface';
@@ -21,7 +20,6 @@ export class GrpcNotifier implements INotifierService {
   constructor(
     address: string,
     private readonly tagRepository: ISubscriptionTagRepository,
-    private readonly confirmationFallback: IConfirmationSender,
   ) {
     this.client = new NotificationServiceClient(address, credentials.createInsecure());
   }
@@ -35,10 +33,6 @@ export class GrpcNotifier implements INotifierService {
     ) {
       await this.tagRepository.advanceTag(payload.email, payload.repo, payload.tag);
     }
-  }
-
-  sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void> {
-    return this.confirmationFallback.sendConfirmationEmail(email, repoFullName, token);
   }
 
   private callServer(
