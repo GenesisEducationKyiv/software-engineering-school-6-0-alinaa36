@@ -15,7 +15,10 @@ import type { INotifierService } from "../modules/sender/interfaces/notifier.int
 import { NotifierService } from "../modules/sender/services/mail.service";
 import { SmtpProvider } from "../modules/sender/mail.provider";
 import { MeteredNotifierService } from "../modules/sender/decorators/notifier.service.metered";
-import type { IIdempotencyStore } from "../modules/sender/interfaces/idempotency-store.interface";
+import type {
+  ClaimResult,
+  IIdempotencyStore,
+} from "../modules/sender/interfaces/idempotency-store.interface";
 import { RedisIdempotencyStore } from "../modules/sender/adapters/redis-idempotency.store";
 import type { IDeliveredPublisher } from "../modules/sender/interfaces/delivered-publisher.interface";
 import { RabbitDeliveredPublisher } from "../modules/sender/adapters/rabbit-delivered-publisher";
@@ -30,6 +33,7 @@ const notifier: INotifierService = new MeteredNotifierService(
 const idempotency: IIdempotencyStore = new RedisIdempotencyStore(
   redis,
   config.idempotency.ttlSeconds,
+  config.idempotency.leaseSeconds,
 );
 
 const deliveredPublisher: IDeliveredPublisher = new RabbitDeliveredPublisher();
@@ -123,9 +127,9 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
     return;
   }
 
-  let claimed: boolean;
+  let claim: ClaimResult;
   try {
-    claimed = await idempotency.markIfFirst(message.idempotencyKey);
+    claim = await idempotency.claim(message.idempotencyKey);
   } catch (err) {
     Logger.error(
       { err, key: message.idempotencyKey },
@@ -136,7 +140,7 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
     return;
   }
 
-  if (!claimed) {
+  if (claim === "done") {
     try {
       await confirmDelivery(message);
       ch.ack(msg);
@@ -151,6 +155,16 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
       );
       handleRetry(msg, ch);
     }
+
+    return;
+  }
+
+  if (claim === "in_progress") {
+    Logger.info(
+      { type: message.type, key: message.idempotencyKey },
+      "[Consumer] Delivery already in progress, requeueing",
+    );
+    handleRetry(msg, ch);
 
     return;
   }
@@ -176,6 +190,13 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
 
     return;
   }
+
+  await idempotency.confirm(message.idempotencyKey).catch((err: unknown) => {
+    Logger.error(
+      { err, key: message.idempotencyKey },
+      "[Consumer] Failed to confirm idempotency key after delivery",
+    );
+  });
 
   try {
     await confirmDelivery(message);

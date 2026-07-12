@@ -1,4 +1,4 @@
-import { credentials } from '@grpc/grpc-js';
+import { credentials, Metadata } from '@grpc/grpc-js';
 import type { ServiceError } from '@grpc/grpc-js';
 import {
   NotificationServiceClient,
@@ -11,6 +11,8 @@ import type {
   ReleaseNotificationPayload,
 } from '../interfaces/notifier.interface';
 import type { ISubscriptionTagRepository } from '../../subscriptions/interfaces/subscription-repository.interface';
+
+const CALL_TIMEOUT_MS = 30_000;
 
 export class GrpcNotifier implements INotifierService {
   private readonly client: NotificationServiceClient;
@@ -50,6 +52,8 @@ export class GrpcNotifier implements INotifierService {
           unsubscribeToken: payload.unsubscribeToken,
           idempotencyKey: releaseIdempotencyKey(payload.email, payload.repo, payload.tag),
         },
+        new Metadata(),
+        { deadline: new Date(Date.now() + CALL_TIMEOUT_MS) },
         (err: ServiceError | null, response: SendReleaseNotificationResponse) => {
           if (err) {
             reject(err);

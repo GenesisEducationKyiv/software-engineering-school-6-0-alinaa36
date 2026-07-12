@@ -7,7 +7,7 @@ import { closeRedis } from './lib/redis/redis';
 
 async function main(): Promise<void> {
   const metricsServer = startMetricsServer();
-  const grpcServer = startNotificationGrpcServer();
+  const grpcServer = await startNotificationGrpcServer();
   await startEmailConsumer();
 
   let shuttingDown = false;

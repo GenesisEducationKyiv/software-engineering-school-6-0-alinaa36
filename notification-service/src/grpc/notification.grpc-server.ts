@@ -10,7 +10,10 @@ import { Logger } from '../lib/logger/logger';
 import { config } from '../lib/config/env.config';
 import { redis } from '../lib/redis/redis';
 import type { INotifierService } from '../modules/sender/interfaces/notifier.interface';
-import type { IIdempotencyStore } from '../modules/sender/interfaces/idempotency-store.interface';
+import type {
+  ClaimResult,
+  IIdempotencyStore,
+} from '../modules/sender/interfaces/idempotency-store.interface';
 import { NotifierService } from '../modules/sender/services/mail.service';
 import { SmtpProvider } from '../modules/sender/mail.provider';
 import { MeteredNotifierService } from '../modules/sender/decorators/notifier.service.metered';
@@ -26,7 +29,7 @@ function validateRequest(req: SendReleaseNotificationRequest): string | null {
   return null;
 }
 
-async function handleSendReleaseNotification(
+export async function handleSendReleaseNotification(
   call: grpc.ServerUnaryCall<SendReleaseNotificationRequest, SendReleaseNotificationResponse>,
   callback: grpc.sendUnaryData<SendReleaseNotificationResponse>,
   notifier: INotifierService,
@@ -41,9 +44,9 @@ async function handleSendReleaseNotification(
     return;
   }
 
-  let claimed: boolean;
+  let claim: ClaimResult;
   try {
-    claimed = await idempotency.markIfFirst(req.idempotencyKey);
+    claim = await idempotency.claim(req.idempotencyKey);
   } catch (err) {
     Logger.error({ err, key: req.idempotencyKey }, '[gRPC] Idempotency store unavailable');
     callback({ code: grpc.status.UNAVAILABLE, message: 'Idempotency store unavailable' }, null);
@@ -51,9 +54,16 @@ async function handleSendReleaseNotification(
     return;
   }
 
-  if (!claimed) {
+  if (claim === 'done') {
     Logger.info({ key: req.idempotencyKey }, '[gRPC] Duplicate release notification, skipping send');
     callback(null, { status: DeliveryStatus.DELIVERY_STATUS_DUPLICATE, message: 'Already delivered' });
+
+    return;
+  }
+
+  if (claim === 'in_progress') {
+    Logger.info({ key: req.idempotencyKey }, '[gRPC] Release notification already in progress');
+    callback({ code: grpc.status.ABORTED, message: 'Delivery already in progress' }, null);
 
     return;
   }
@@ -75,6 +85,10 @@ async function handleSendReleaseNotification(
     return;
   }
 
+  await idempotency.confirm(req.idempotencyKey).catch((confirmErr: unknown) => {
+    Logger.error({ err: confirmErr, key: req.idempotencyKey }, '[gRPC] Failed to confirm idempotency key');
+  });
+
   Logger.info({ email: req.email, repo: req.repo, tag: req.tag }, '[gRPC] Release notification sent');
   callback(null, { status: DeliveryStatus.DELIVERY_STATUS_SENT, message: 'Sent' });
 }
@@ -90,28 +104,31 @@ function createHandlers(
   };
 }
 
-export function startNotificationGrpcServer(): grpc.Server {
+export function startNotificationGrpcServer(): Promise<grpc.Server> {
   const notifier: INotifierService = new MeteredNotifierService(
     new NotifierService(new SmtpProvider()),
   );
   const idempotency: IIdempotencyStore = new RedisIdempotencyStore(
     redis,
     config.idempotency.ttlSeconds,
+    config.idempotency.leaseSeconds,
   );
 
   const server = new grpc.Server();
   server.addService(NotificationServiceService, createHandlers(notifier, idempotency));
 
   const address = `0.0.0.0:${config.grpc.port}`;
-  server.bindAsync(address, grpc.ServerCredentials.createInsecure(), (err, port) => {
-    if (err) {
-      Logger.error({ err }, '[gRPC] Failed to start notification server');
 
-      return;
-    }
+  return new Promise((resolve, reject) => {
+    server.bindAsync(address, grpc.ServerCredentials.createInsecure(), (err, port) => {
+      if (err) {
+        reject(err);
 
-    Logger.info({ port }, '[gRPC] Notification server running');
+        return;
+      }
+
+      Logger.info({ port }, '[gRPC] Notification server running');
+      resolve(server);
+    });
   });
-
-  return server;
 }

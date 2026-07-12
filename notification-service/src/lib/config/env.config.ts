@@ -13,6 +13,7 @@ const envSchema = z.object({
   RECONNECT_DELAY_MS: z.coerce.number().default(5_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().default(10_000),
   IDEMPOTENCY_TTL_SECONDS: z.coerce.number().default(86_400),
+  IDEMPOTENCY_LEASE_SECONDS: z.coerce.number().default(60),
 
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number(),
@@ -54,6 +55,7 @@ export const config = {
   },
   idempotency: {
     ttlSeconds: parsedEnv.IDEMPOTENCY_TTL_SECONDS,
+    leaseSeconds: parsedEnv.IDEMPOTENCY_LEASE_SECONDS,
   },
   mail: {
     host: parsedEnv.SMTP_HOST,
