@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import supertest from 'supertest';
+import { FastifyInstance } from 'fastify';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import supertest from 'supertest';
+import { vi, describe, beforeAll, afterAll, it, expect } from 'vitest';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({

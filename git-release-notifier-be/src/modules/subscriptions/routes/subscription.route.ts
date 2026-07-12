@@ -1,10 +1,14 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { validateBodyZod } from '../../common/middlewares/zod-validator';
 import { SubscribeSchema } from '../dtos/subscription.dto';
 import { verifyApiKey } from '../../common/middlewares/api-key.middleware';
 import { SubscriptionController } from '../controllers/subscription.controller';
 
-export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void> {
+export function subscriptionRoutes(
+  fastify: FastifyInstance,
+  opts: FastifyPluginOptions,
+  done: () => void,
+): void {
   const controller = new SubscriptionController(fastify.subscriptionService);
 
   const authenticated = { preHandler: [verifyApiKey] };
@@ -17,4 +21,6 @@ export async function subscriptionRoutes(fastify: FastifyInstance): Promise<void
 
   fastify.get('/confirm/:token', (req, rep) => controller.confirm(req, rep));
   fastify.get('/unsubscribe/:token', (req, rep) => controller.unsubscribe(req, rep));
+
+  done();
 }

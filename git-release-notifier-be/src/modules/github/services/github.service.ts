@@ -14,7 +14,9 @@ export class GithubService {
   }
 
   async getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult> {
-    if (repos.length === 0) return {};
+    if (repos.length === 0) {
+      return {};
+    }
 
     const sortedRepos = [...repos].sort();
     const batchHash = Buffer.from(sortedRepos.join(',')).toString('base64');
@@ -23,7 +25,7 @@ export class GithubService {
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
       Logger.info('[GitHub] Releases fetched quickly from Redis cache');
-      return JSON.parse(cachedData);
+      return JSON.parse(cachedData) as BatchReleaseResult;
     }
 
     Logger.info('[GitHub] Cache miss. Fetching from API...');

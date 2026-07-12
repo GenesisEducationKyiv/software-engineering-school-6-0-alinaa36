@@ -15,6 +15,7 @@ import { SubscriptionService } from '../services/subscription.service';
 import { notifierService } from '../../sender/services/mail.service';
 import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
 import { NotFoundError } from '../../../lib/errors/app.error';
+import { GithubService } from '../../github/services/github.service';
 
 // ---- helpers ----
 
@@ -35,7 +36,7 @@ function makeRepository() {
 function makeGithubService() {
   return {
     getLatestReleasesBatch: vi.fn(),
-  };
+  } as unknown as GithubService;
 }
 
 describe('SubscriptionService', () => {
@@ -47,13 +48,12 @@ describe('SubscriptionService', () => {
     vi.clearAllMocks();
     repository = makeRepository();
     githubService = makeGithubService();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    service = new SubscriptionService(repository as any, githubService as any);
+    service = new SubscriptionService(repository, githubService);
   });
 
   describe('subscribeToRepo', () => {
     beforeEach(() => {
-      githubService.getLatestReleasesBatch.mockResolvedValue({
+      vi.mocked(githubService).getLatestReleasesBatch.mockResolvedValue({
         'user/repo': 'v1.0.0',
       });
       repository.checkIfActiveExists.mockResolvedValue(false);
@@ -106,7 +106,7 @@ describe('SubscriptionService', () => {
     });
 
     it('кидає NotFoundError якщо репозиторій не знайдено на GitHub', async () => {
-      githubService.getLatestReleasesBatch.mockResolvedValue({});
+      vi.mocked(githubService).getLatestReleasesBatch.mockResolvedValue({});
 
       await expect(
         service.subscribeToRepo('user@example.com', 'user/invalid-repo'),

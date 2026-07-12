@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: git-release-notifier-be
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: git-release-notifier-be/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  test:
+    name: Run Tests
+    needs: lint 
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: git-release-notifier-be
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password123
+          POSTGRES_DB: github_notifier_test
+        ports:
+          - 5450:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        ports:
+          - 5672:5672
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: git-release-notifier-be/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Unit tests
+        run: npm run test -- --run
+
+      - name: Apply DB schema
+        run: npx prisma db push
+        env:
+          DATABASE_URL: postgresql://postgres:password123@127.0.0.1:5450/github_notifier_test?schema=public
+
+      - name: Integration tests
+        run: npx vitest run --config vitest.integration.config.ts
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:password123@127.0.0.1:5450/github_notifier_test?schema=public
+          REDIS_URL: redis://127.0.0.1:6379
+          RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672
+          API_KEY: super-secret-alina-key-2026
+          GITHUB_TOKEN: test-dummy-token-123
+          APP_URL: http://localhost:3001
+          SMTP_HOST: smtp.ethereal.email
+          SMTP_PORT: "587"
+          SMTP_USER: test@ethereal.email
+          SMTP_PASS: testpass

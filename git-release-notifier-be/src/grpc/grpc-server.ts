@@ -86,9 +86,13 @@ const handleGrpcError = <T>(error: unknown, callback: grpc.sendUnaryData<T>) => 
 
   if (error instanceof AppError) {
     message = error.message;
-    if (error instanceof NotFoundError) code = grpc.status.NOT_FOUND;
-    else if (error instanceof ValidationError) code = grpc.status.INVALID_ARGUMENT;
-    else if (error instanceof ConflictError) code = grpc.status.ALREADY_EXISTS;
+    if (error instanceof NotFoundError) {
+      code = grpc.status.NOT_FOUND;
+    } else if (error instanceof ValidationError) {
+      code = grpc.status.INVALID_ARGUMENT;
+    } else if (error instanceof ConflictError) {
+      code = grpc.status.ALREADY_EXISTS;
+    }
   } else if (error instanceof Error) {
     message = error.message;
   }

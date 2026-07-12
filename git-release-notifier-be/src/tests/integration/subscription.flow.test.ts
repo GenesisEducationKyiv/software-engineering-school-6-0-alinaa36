@@ -71,11 +71,9 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
       .post('/api/subscribe')
       .send({ email: 'alina-test@example.com', repo: 'facebook/react' });
 
-    console.log('STATUS:', subscribeRes.status);
-    console.log('BODY:', JSON.stringify(subscribeRes.body, null, 2));
     expect(subscribeRes.status).toBe(201);
 
-    const confirmToken = subscribeRes.body._test_token;
+    const confirmToken = (subscribeRes.body as { _test_token?: string })._test_token;
     expect(confirmToken).toBeDefined();
 
     const confirmRes = await client.get(`/api/confirm/${confirmToken}`);
@@ -85,8 +83,10 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
       .get('/api/subscriptions?email=alina-test@example.com')
       .set('x-api-key', TEST_API_KEY);
 
-    expect(subsRes.body.subscriptions).toHaveLength(1);
-    expect(subsRes.body.subscriptions[0].status).toBe('ACTIVE');
+    expect((subsRes.body as { subscriptions: unknown[] }).subscriptions).toHaveLength(1);
+    expect((subsRes.body as { subscriptions: { status: string }[] }).subscriptions[0].status).toBe(
+      'ACTIVE',
+    );
 
     const subInDb = await prisma.subscription.findFirst({
       where: { email: 'alina-test@example.com', repository: 'facebook/react' },
@@ -104,7 +104,8 @@ describe('subscription flow (Existing Docker Dev DB)', () => {
       .set('x-api-key', TEST_API_KEY);
 
     expect(finalRes.status).toBe(200);
-    expect(finalRes.body.subscriptions).toHaveLength(0);
+    const finalSubscriptions = (finalRes.body as { subscriptions: unknown[] }).subscriptions;
+    expect(finalSubscriptions).toHaveLength(0);
   });
 
   describe('GitHub Validation (Вимога 6)', () => {

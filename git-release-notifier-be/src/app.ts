@@ -57,21 +57,25 @@ export async function buildApp(): Promise<FastifyInstance> {
 }
 
 if (require.main === module) {
-  import('./workers/scanner/scanner.worker');
+  void import('./workers/scanner/scanner.worker');
 
-  buildApp().then(async (fastify) => {
-    try {
-      await fastify.listen({ port: 3000, host: '0.0.0.0' });
-      Logger.info('[REST API] Server is running on http://localhost:3000');
-      Logger.info('[REST API] Swagger UI available at http://localhost:3000/docs');
-      startGrpcServer(fastify.subscriptionService);
-    } catch (err) {
-      Logger.error({ err }, '[App] Server failed to start');
+  buildApp()
+    .then(async (fastify) => {
+      try {
+        await fastify.listen({ port: 3000, host: '0.0.0.0' });
+        Logger.info('[REST API] Server is running on http://localhost:3000');
+        Logger.info('[REST API] Swagger UI available at http://localhost:3000/docs');
+        startGrpcServer(fastify.subscriptionService);
+      } catch (err) {
+        Logger.error({ err }, '[App] Server failed to start');
+        process.exit(1);
+      }
+    })
+    .catch((err) => {
+      Logger.error({ err }, '[App] Failed to build app');
       process.exit(1);
-    }
-  });
-
-  const shutdown = async (signal: string) => {
+    });
+  const shutdown = (signal: string): void => {
     Logger.info(`Received ${signal}. Shutting down gracefully...`);
     process.exit(0);
   };

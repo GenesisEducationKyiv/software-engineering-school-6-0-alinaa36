@@ -12,13 +12,16 @@ vi.mock('../../../lib/logger/logger', () => ({
 import { UnauthorizedError } from '../../../lib/errors/app.error';
 import { Logger } from '../../../lib/logger/logger';
 import { verifyApiKey } from '../middlewares/api-key.middleware';
+import { FastifyRequest } from 'fastify';
 
 // ---- helpers ----
 
 function makeRequest(apiKey?: string | string[]) {
   return {
-    headers: { 'x-api-key': apiKey },
-  } as any;
+    headers: {
+      'x-api-key': apiKey,
+    },
+  } as unknown as FastifyRequest;
 }
 
 // ---- тести ----
@@ -48,13 +51,11 @@ describe('verifyApiKey', () => {
 
   it('логує попередження при невдалій авторизації з ключем', async () => {
     await verifyApiKey(makeRequest('wrong-key')).catch(() => {});
-
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('wrong-key'));
   });
 
   it('логує "missing" якщо ключ не передано', async () => {
     await verifyApiKey(makeRequest()).catch(() => {});
-
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('missing'));
   });
 
@@ -66,7 +67,6 @@ describe('verifyApiKey', () => {
 
   it('логує перший елемент масиву при невдалій авторизації', async () => {
     await verifyApiKey(makeRequest(['bad-key', 'other-key'])).catch(() => {});
-
     expect(Logger.warn).toHaveBeenCalledWith(expect.stringContaining('bad-key'));
   });
 });
