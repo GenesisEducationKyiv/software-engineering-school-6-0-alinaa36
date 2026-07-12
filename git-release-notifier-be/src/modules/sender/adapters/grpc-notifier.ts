@@ -53,7 +53,7 @@ export class GrpcNotifier implements INotifierService {
           idempotencyKey: releaseIdempotencyKey(payload.email, payload.repo, payload.tag),
         },
         new Metadata(),
-        { deadline: new Date(Date.now() + CALL_TIMEOUT_MS) },
+        { deadline: Date.now() + CALL_TIMEOUT_MS },
         (err: ServiceError | null, response: SendReleaseNotificationResponse) => {
           if (err) {
             reject(err);
