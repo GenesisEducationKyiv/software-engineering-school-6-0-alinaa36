@@ -1,4 +1,4 @@
-import { releaseIdempotencyKey, confirmationIdempotencyKey } from '@grn/contracts';
+import { releaseIdempotencyKey } from '@grn/contracts';
 import type {
   INotifierService,
   ReleaseNotificationPayload,
@@ -13,16 +13,6 @@ export class QueueNotifier implements INotifierService {
       type: 'release',
       idempotencyKey: releaseIdempotencyKey(payload.email, payload.repo, payload.tag),
       ...payload,
-    });
-  }
-
-  sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void> {
-    return this.queue.publish({
-      type: 'confirmation',
-      idempotencyKey: confirmationIdempotencyKey(email, repoFullName, token),
-      email,
-      repo: repoFullName,
-      confirmToken: token,
     });
   }
 }

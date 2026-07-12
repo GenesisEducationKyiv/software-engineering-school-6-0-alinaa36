@@ -49,32 +49,4 @@ describe('QueueNotifier', () => {
       await expect(notifier.sendReleaseNotification(payload)).rejects.toThrow('queue down');
     });
   });
-
-  describe('sendConfirmationEmail', () => {
-    it('публікує одне повідомлення в чергу', async () => {
-      await notifier.sendConfirmationEmail('user@example.com', 'facebook/react', 'confirm-token');
-
-      expect(queue.publish).toHaveBeenCalledOnce();
-    });
-
-    it('мапить аргументи на confirmation-payload контракту', async () => {
-      await notifier.sendConfirmationEmail('user@example.com', 'facebook/react', 'confirm-token');
-
-      expect(queue.publish).toHaveBeenCalledWith({
-        type: 'confirmation',
-        idempotencyKey: 'confirmation:user@example.com:facebook/react:confirm-token',
-        email: 'user@example.com',
-        repo: 'facebook/react',
-        confirmToken: 'confirm-token',
-      });
-    });
-
-    it('пробрасовує помилку якщо publish кинув виняток', async () => {
-      queue.publish.mockRejectedValue(new Error('queue down'));
-
-      await expect(
-        notifier.sendConfirmationEmail('user@example.com', 'facebook/react', 'confirm-token'),
-      ).rejects.toThrow('queue down');
-    });
-  });
 });

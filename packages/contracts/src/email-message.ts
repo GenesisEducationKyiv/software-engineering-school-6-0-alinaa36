@@ -15,7 +15,7 @@ export const emailMessageSchema = z.discriminatedUnion('type', [
     email: z.string().email(),
     repo: z.string(),
     confirmToken: z.string(),
-    sagaId: z.string().uuid().optional(),
+    sagaId: z.string().uuid(),
   }),
 ]);
 

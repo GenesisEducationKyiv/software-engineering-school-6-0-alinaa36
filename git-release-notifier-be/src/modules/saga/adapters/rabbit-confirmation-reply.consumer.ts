@@ -44,7 +44,7 @@ async function handleMessage(
   } catch (err) {
     Logger.error(
       { err, sagaId: reply.sagaId },
-      '[Saga] Failed to handle confirmation reply, requeueing',
+      '[Saga] Failed to handle confirmation reply, dropping (recovers on timeout sweep)',
     );
     nack();
   }
@@ -62,18 +62,24 @@ export async function startConfirmationReplyConsumer(saga: SubscribeSaga): Promi
     (msg) => {
       if (!msg) return;
 
-      void handleMessage(
-        msg,
-        () => channel.ack(msg),
-        () => channel.nack(msg, false, true),
-        saga,
-      ).catch((err) => {
-        Logger.error({ err }, '[Saga] Unhandled error in reply consumer');
+      const ack = () => {
         try {
-          channel.nack(msg, false, true);
-        } catch (nackErr) {
-          Logger.error({ err: nackErr }, '[Saga] Failed to nack during fallback');
+          channel.ack(msg);
+        } catch (err) {
+          Logger.error({ err }, '[Saga] Failed to ack confirmation reply');
         }
+      };
+      const nack = () => {
+        try {
+          channel.nack(msg, false, false);
+        } catch (err) {
+          Logger.error({ err }, '[Saga] Failed to nack confirmation reply');
+        }
+      };
+
+      void handleMessage(msg, ack, nack, saga).catch((err) => {
+        Logger.error({ err }, '[Saga] Unhandled error in reply consumer');
+        nack();
       });
     },
     { noAck: false },

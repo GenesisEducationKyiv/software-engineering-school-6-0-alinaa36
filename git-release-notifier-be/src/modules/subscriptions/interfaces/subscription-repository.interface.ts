@@ -41,6 +41,7 @@ export interface ISubscriptionRepository {
   activate(id: string): Promise<SubscriptionEntity>;
   findByUnsubscribeToken(token: string): Promise<SubscriptionEntity | null>;
   delete(id: string): Promise<SubscriptionEntity>;
+  deleteIfPending(id: string): Promise<boolean>;
   findByEmail(email: string): Promise<SubscriptionSummary[]>;
   countActive(): Promise<number>;
   groupByRepository(): Promise<RepositoryGroup[]>;

@@ -23,9 +23,9 @@ export class SagaRepository implements ISagaRepository {
     return raw ? this.toRecord(raw) : null;
   }
 
-  async findStuck(state: SagaState, olderThan: Date): Promise<SagaRecord[]> {
+  async findStuck(states: SagaState[], olderThan: Date): Promise<SagaRecord[]> {
     const rows = await this.prisma.sagaInstance.findMany({
-      where: { state, createdAt: { lt: olderThan } },
+      where: { state: { in: states }, updatedAt: { lt: olderThan } },
     });
 
     return rows.map((row) => this.toRecord(row));
@@ -36,6 +36,20 @@ export class SagaRepository implements ISagaRepository {
       where: { id },
       data: lastError === undefined ? { state } : { state, lastError },
     });
+  }
+
+  async transition(
+    id: string,
+    from: SagaState[],
+    to: SagaState,
+    lastError?: string,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.sagaInstance.updateMany({
+      where: { id, state: { in: from } },
+      data: lastError === undefined ? { state: to } : { state: to, lastError },
+    });
+
+    return count > 0;
   }
 
   private toRecord(raw: SagaInstance): SagaRecord {
