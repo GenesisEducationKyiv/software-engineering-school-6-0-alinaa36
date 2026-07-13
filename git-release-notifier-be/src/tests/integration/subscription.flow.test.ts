@@ -6,7 +6,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { randomUUID } from 'crypto';
 
-vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),

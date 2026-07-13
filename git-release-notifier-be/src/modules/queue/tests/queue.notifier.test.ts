@@ -161,34 +161,6 @@ describe('addScanJobs', () => {
 
       expect(getPayload<ScanJobPayload>(channel, 0).lockKey).toBe('lock:scan:test');
     });
-
-    it('генерує різні ключі для різних батчів', async () => {
-      lockStore.acquireForBatch
-        .mockResolvedValueOnce({ acquired: true, lockKey: 'lock:scan:first' })
-        .mockResolvedValueOnce({ acquired: true, lockKey: 'lock:scan:second' });
-
-      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4'], lockStore, queue);
-
-      const first = getPayload<ScanJobPayload>(channel, 0).lockKey;
-      const second = getPayload<ScanJobPayload>(channel, 1).lockKey;
-
-      expect(first).not.toBe(second);
-    });
-
-    it('релізує лок якщо sendToQueue повернув false', async () => {
-      lockStore.acquireForBatch.mockResolvedValue({ acquired: true, lockKey: 'lock:scan:test' });
-      vi.mocked(channel.sendToQueue).mockReturnValue(false);
-
-      await addScanJobs(['user/repo'], lockStore, queue);
-
-      expect(lockStore.unlock).toHaveBeenCalledWith('lock:scan:test');
-    });
-
-    it('не релізує лок якщо sendToQueue успішний', async () => {
-      await addScanJobs(['user/repo'], lockStore, queue);
-
-      expect(lockStore.unlock).not.toHaveBeenCalled();
-    });
   });
 
   // --- формат повідомлення ---

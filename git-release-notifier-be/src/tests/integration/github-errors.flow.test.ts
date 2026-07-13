@@ -4,7 +4,7 @@ import nock from 'nock';
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 
-vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),

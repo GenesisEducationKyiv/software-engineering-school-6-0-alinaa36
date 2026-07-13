@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/base.fixture';
 
-const EXISTING_REPO = 'facebook/react';
+const EXISTING_REPO = 'react/react';
 const API_KEY =
   process.env.API_KEY ??
   (() => {

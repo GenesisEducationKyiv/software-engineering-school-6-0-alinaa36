@@ -80,6 +80,7 @@ describe('CachedGithubClient', () => {
 
       expect(client.getLatestReleasesBatch).toHaveBeenCalledWith(['facebook/react', 'vuejs/vue']);
     });
+  });
 
     it('повертає результат від GitHub', async () => {
       const { decorator } = makeDecorator({ releases: RELEASES });
