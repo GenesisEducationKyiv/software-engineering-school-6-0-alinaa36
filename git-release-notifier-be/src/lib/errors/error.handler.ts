@@ -1,16 +1,23 @@
 import type { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { AppError } from './app.error';
+import { ERROR_MESSAGES } from './error-messages';
+import { Logger } from '../logger/logger';
 
 export function errorHandler(
   error: FastifyError | AppError | ZodError | Error,
-  request: FastifyRequest,
+  _request: FastifyRequest,
   reply: FastifyReply,
 ): FastifyReply {
   if (error instanceof AppError) {
+    if (!error.isOperational || error.statusCode >= 500) {
+      Logger.error({ err: error }, `[Error] ${error.code}`);
+    }
+
     return reply.status(error.statusCode).send({
       status: 'error',
-      message: error.message,
+      code: error.code,
+      message: ERROR_MESSAGES[error.code],
     });
   }
 
@@ -25,12 +32,13 @@ export function errorHandler(
     });
   }
 
-  request.log.error({ err: error });
+  Logger.error({ err: error }, '[Error] Unhandled');
 
   const isDev = process.env.NODE_ENV === 'development';
 
   return reply.status(500).send({
     status: 'error',
+    code: 'INTERNAL',
     message: isDev ? error.message : 'Internal server error',
     ...(isDev && {
       errorName: error.name,

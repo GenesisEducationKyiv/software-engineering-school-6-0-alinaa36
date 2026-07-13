@@ -9,40 +9,36 @@ export class ScanBatchProcessor {
 
     for (const repoName of repos) {
       const newTag = latestReleases[repoName];
+      if (!newTag) continue;
 
-      if (!newTag) {
-        continue;
-      }
+      await this.processRepo(repoName, newTag);
+    }
+  }
 
-      const subscribersToNotify = await this.deps.repository.getOutdatedSubscribers(
-        repoName,
-        newTag,
-      );
+  private async processRepo(repoName: string, newTag: string): Promise<void> {
+    const subscribersToNotify = await this.deps.repository.getOutdatedSubscribers(repoName, newTag);
 
-      if (subscribersToNotify.length === 0) {
-        continue;
-      }
+    if (subscribersToNotify.length === 0) return;
 
-      Logger.info(
-        `New release for ${repoName}: ${newTag}. Sending ${subscribersToNotify.length} emails.`,
-      );
+    Logger.info(
+      `New release for ${repoName}: ${newTag}. Sending ${subscribersToNotify.length} emails.`,
+    );
 
-      const results = await Promise.allSettled(
-        subscribersToNotify.map(async (sub) => {
-          await this.deps.notifier.sendReleaseNotification({
-            email: sub.email,
-            repo: repoName,
-            tag: newTag,
-            unsubscribeToken: sub.unsubscribeToken,
-          });
-          await this.deps.repository.updateTags([sub.id], newTag);
-        }),
-      );
+    const results = await Promise.allSettled(
+      subscribersToNotify.map(async (sub) => {
+        await this.deps.notifier.sendReleaseNotification({
+          email: sub.email,
+          repo: repoName,
+          tag: newTag,
+          unsubscribeToken: sub.unsubscribeToken,
+        });
+        await this.deps.repository.updateTags([sub.id], newTag);
+      }),
+    );
 
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      if (failed > 0) {
-        Logger.warn(`${failed}/${results.length} notifications failed for ${repoName}`);
-      }
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      Logger.warn(`${failed}/${results.length} notifications failed for ${repoName}`);
     }
   }
 }

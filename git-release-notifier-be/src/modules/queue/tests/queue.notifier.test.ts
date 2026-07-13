@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mocked } from 'vitest';
 import type { Channel } from 'amqplib';
 
 vi.mock('../../../lib/config/env.config', () => ({
@@ -18,20 +19,16 @@ vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn(),
 }));
 
-vi.mock('../../../lib/redis/redis', () => ({
-  redis: { set: vi.fn(), del: vi.fn() },
-}));
-
 vi.mock('../../../workers/config/worker.config', () => ({
   WorkerConfig: {
     BATCH_SIZE: 3,
-    LOCK_TTL_SECONDS: 300,
   },
 }));
 
 import { createChannel } from '../../../lib/rabbit/rabbit.channel';
-import { redis } from '../../../lib/redis/redis';
 import { addScanJobs } from '../queue.notifier';
+import type { ILockStore } from '../../../workers/scanner/infrastructure/lock/lock-store.interface';
+import { RabbitScanQueue } from '../adapters/rabbit-scan-queue';
 
 // ---- типи ----
 
@@ -41,9 +38,16 @@ type ScanJobPayload = { repos: string[]; lockKey: string };
 
 function makeChannel(): Channel {
   return {
-    sendToQueue: vi.fn(),
+    sendToQueue: vi.fn().mockReturnValue(true),
     close: vi.fn().mockResolvedValue(undefined),
   } as unknown as Channel;
+}
+
+function makeLockStore(): Mocked<ILockStore> {
+  return {
+    acquireForBatch: vi.fn().mockResolvedValue({ acquired: true, lockKey: 'lock:scan:default' }),
+    unlock: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 function getPayload<T>(channel: Channel, callIndex = 0): T {
@@ -56,36 +60,39 @@ function getPayload<T>(channel: Channel, callIndex = 0): T {
 
 describe('addScanJobs', () => {
   let channel: Channel;
+  let lockStore: Mocked<ILockStore>;
+  let queue: RabbitScanQueue;
 
   beforeEach(() => {
     vi.clearAllMocks();
     channel = makeChannel();
+    lockStore = makeLockStore();
+    queue = new RabbitScanQueue();
     vi.mocked(createChannel).mockResolvedValue(channel);
-    vi.mocked(redis.set).mockResolvedValue('OK');
   });
 
   // --- базова поведінка ---
 
   it('не відправляє жодного повідомлення для порожнього масиву', async () => {
-    await addScanJobs([]);
+    await addScanJobs([], lockStore, queue);
 
     expect(vi.mocked(channel.sendToQueue)).not.toHaveBeenCalled();
   });
 
   it('закриває channel навіть якщо repos порожній', async () => {
-    await addScanJobs([]);
+    await addScanJobs([], lockStore, queue);
 
     expect(channel.close).toHaveBeenCalledOnce();
   });
 
   it('відправляє одне повідомлення для одного репозиторію', async () => {
-    await addScanJobs(['user/repo']);
+    await addScanJobs(['user/repo'], lockStore, queue);
 
     expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(1);
   });
 
   it('закриває channel після відправки', async () => {
-    await addScanJobs(['user/repo']);
+    await addScanJobs(['user/repo'], lockStore, queue);
 
     expect(channel.close).toHaveBeenCalledOnce();
   });
@@ -96,76 +103,63 @@ describe('addScanJobs', () => {
     it('розбиває репозиторії на батчі по BATCH_SIZE', async () => {
       const repos = ['r/1', 'r/2', 'r/3', 'r/4', 'r/5', 'r/6', 'r/7'];
 
-      await addScanJobs(repos);
+      await addScanJobs(repos, lockStore, queue);
 
       expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(3);
     });
 
     it('payload першого батчу містить перші BATCH_SIZE репозиторіїв', async () => {
-      const repos = ['r/1', 'r/2', 'r/3', 'r/4'];
+      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4'], lockStore, queue);
 
-      await addScanJobs(repos);
-
-      const firstPayload = getPayload<ScanJobPayload>(channel, 0);
-
-      expect(firstPayload.repos).toEqual(['r/1', 'r/2', 'r/3']);
+      expect(getPayload<ScanJobPayload>(channel, 0).repos).toEqual(['r/1', 'r/2', 'r/3']);
     });
 
     it('останній батч містить залишок репозиторіїв', async () => {
-      const repos = ['r/1', 'r/2', 'r/3', 'r/4'];
+      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4'], lockStore, queue);
 
-      await addScanJobs(repos);
-
-      const lastPayload = getPayload<ScanJobPayload>(channel, 1);
-
-      expect(lastPayload.repos).toEqual(['r/4']);
+      expect(getPayload<ScanJobPayload>(channel, 1).repos).toEqual(['r/4']);
     });
   });
 
   // --- Redis lock ---
 
   describe('Redis lock', () => {
-    it('викликає redis.set з NX для кожного батчу', async () => {
-      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4']);
+    it('викликає acquireForBatch для кожного батчу', async () => {
+      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4'], lockStore, queue);
 
-      expect(redis.set).toHaveBeenCalledTimes(2);
+      expect(lockStore.acquireForBatch).toHaveBeenCalledTimes(2);
     });
 
-    it('викликає redis.set з правильними аргументами', async () => {
-      await addScanJobs(['r/1']);
+    it('викликає acquireForBatch з репозиторіями батчу', async () => {
+      await addScanJobs(['r/1', 'r/2', 'r/3'], lockStore, queue);
 
-      expect(redis.set).toHaveBeenCalledWith(
-        expect.stringContaining('lock:scan:'),
-        'processing',
-        'EX',
-        300,
-        'NX',
-      );
+      expect(lockStore.acquireForBatch).toHaveBeenCalledWith(['r/1', 'r/2', 'r/3']);
     });
 
     it('пропускає батч якщо замок вже встановлено', async () => {
-      vi.mocked(redis.set).mockResolvedValueOnce(null).mockResolvedValueOnce('OK');
+      lockStore.acquireForBatch
+        .mockResolvedValueOnce({ acquired: false, lockKey: 'lock:scan:1' })
+        .mockResolvedValueOnce({ acquired: true, lockKey: 'lock:scan:2' });
 
-      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4']);
+      await addScanJobs(['r/1', 'r/2', 'r/3', 'r/4'], lockStore, queue);
 
       expect(vi.mocked(channel.sendToQueue)).toHaveBeenCalledTimes(1);
     });
 
     it('пропускає всі батчі якщо всі замки встановлено', async () => {
-      vi.mocked(redis.set).mockResolvedValue(null);
+      lockStore.acquireForBatch.mockResolvedValue({ acquired: false, lockKey: 'lock:scan:1' });
 
-      await addScanJobs(['r/1', 'r/2', 'r/3']);
+      await addScanJobs(['r/1', 'r/2', 'r/3'], lockStore, queue);
 
       expect(vi.mocked(channel.sendToQueue)).not.toHaveBeenCalled();
     });
 
-    it('payload містить lockKey який відповідає ключу в Redis', async () => {
-      await addScanJobs(['user/repo']);
+    it('payload містить lockKey від acquireForBatch', async () => {
+      lockStore.acquireForBatch.mockResolvedValue({ acquired: true, lockKey: 'lock:scan:test' });
 
-      const redisKey = vi.mocked(redis.set).mock.calls[0][0] as string;
-      const payload = getPayload<ScanJobPayload>(channel, 0);
+      await addScanJobs(['user/repo'], lockStore, queue);
 
-      expect(payload.lockKey).toBe(redisKey);
+      expect(getPayload<ScanJobPayload>(channel, 0).lockKey).toBe('lock:scan:test');
     });
   });
 
@@ -173,20 +167,20 @@ describe('addScanJobs', () => {
 
   describe('формат повідомлення', () => {
     it('відправляє повідомлення з persistent: true', async () => {
-      await addScanJobs(['user/repo']);
+      await addScanJobs(['user/repo'], lockStore, queue);
 
-      const options = vi.mocked(channel.sendToQueue).mock.calls[0][2];
-
-      expect(options).toEqual({ persistent: true });
+      expect(vi.mocked(channel.sendToQueue).mock.calls[0][2]).toEqual({ persistent: true });
     });
 
     it('payload містить repos та lockKey з коректними значеннями', async () => {
-      await addScanJobs(['user/repo']);
+      lockStore.acquireForBatch.mockResolvedValue({ acquired: true, lockKey: 'lock:scan:abc' });
+
+      await addScanJobs(['user/repo'], lockStore, queue);
 
       const payload = getPayload<ScanJobPayload>(channel, 0);
 
       expect(payload.repos).toEqual(['user/repo']);
-      expect(payload.lockKey).toMatch(/^lock:scan:/);
+      expect(payload.lockKey).toBe('lock:scan:abc');
     });
   });
 
@@ -196,19 +190,23 @@ describe('addScanJobs', () => {
     it('пробрасовує помилку якщо createChannel кинув виняток', async () => {
       vi.mocked(createChannel).mockRejectedValue(new Error('RabbitMQ unavailable'));
 
-      await expect(addScanJobs(['user/repo'])).rejects.toThrow('RabbitMQ unavailable');
+      await expect(addScanJobs(['user/repo'], lockStore, queue)).rejects.toThrow(
+        'RabbitMQ unavailable',
+      );
     });
 
-    it('пробрасовує помилку якщо redis.set кинув виняток', async () => {
-      vi.mocked(redis.set).mockRejectedValue(new Error('Redis unavailable'));
+    it('пробрасовує помилку якщо acquireForBatch кинув виняток', async () => {
+      lockStore.acquireForBatch.mockRejectedValue(new Error('Redis unavailable'));
 
-      await expect(addScanJobs(['user/repo'])).rejects.toThrow('Redis unavailable');
+      await expect(addScanJobs(['user/repo'], lockStore, queue)).rejects.toThrow(
+        'Redis unavailable',
+      );
     });
 
-    it('закриває channel навіть якщо redis.set кинув виняток', async () => {
-      vi.mocked(redis.set).mockRejectedValue(new Error('Redis unavailable'));
+    it('закриває channel навіть якщо acquireForBatch кинув виняток', async () => {
+      lockStore.acquireForBatch.mockRejectedValue(new Error('Redis unavailable'));
 
-      await addScanJobs(['user/repo']).catch(() => {});
+      await addScanJobs(['user/repo'], lockStore, queue).catch(() => {});
 
       expect(channel.close).toHaveBeenCalledOnce();
     });
@@ -216,7 +214,7 @@ describe('addScanJobs', () => {
     it('закриває channel навіть якщо sendToQueue повернув false', async () => {
       vi.mocked(channel.sendToQueue).mockReturnValue(false);
 
-      await addScanJobs(['user/repo']);
+      await addScanJobs(['user/repo'], lockStore, queue);
 
       expect(channel.close).toHaveBeenCalledOnce();
     });

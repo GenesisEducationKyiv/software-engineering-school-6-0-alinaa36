@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { ValidationError } from '../../../lib/errors/app.error';
+import { ErrorCode, ValidationError } from '../../../lib/errors/app.error';
 import type { SubscribeDto } from '../dtos/subscription.dto';
 import type { SubscriptionService } from '../services/subscription.service';
+import { HTTP_MESSAGES } from '../constants/subscription.messages';
 
 export class SubscriptionController {
   constructor(private subscriptionService: SubscriptionService) {}
@@ -12,7 +13,7 @@ export class SubscriptionController {
 
     return reply.status(201).send({
       status: 'success',
-      message: `Будь ласка, перевірте вашу пошту для підтвердження підписки на ${subscription.repository}`,
+      message: HTTP_MESSAGES.SUBSCRIBE_PENDING(subscription.repository),
     });
   }
 
@@ -22,7 +23,7 @@ export class SubscriptionController {
 
     return reply.status(200).send({
       status: 'success',
-      message: `Успіх! Ви підписалися на оновлення ${subscription.repository}`,
+      message: HTTP_MESSAGES.CONFIRM_SUCCESS(subscription.repository),
     });
   }
 
@@ -32,7 +33,7 @@ export class SubscriptionController {
 
     return reply.status(200).send({
       status: 'success',
-      message: `Ви успішно відписалися від ${subscription.repository}`,
+      message: HTTP_MESSAGES.UNSUBSCRIBE_SUCCESS(subscription.repository),
     });
   }
 
@@ -40,7 +41,7 @@ export class SubscriptionController {
     const { email } = request.query as { email: string };
 
     if (!email) {
-      throw new ValidationError("Параметр email є обов'язковим");
+      throw new ValidationError(ErrorCode.EMAIL_REQUIRED);
     }
 
     const subscriptions = await this.subscriptionService.getSubscriptionsByEmail(email);

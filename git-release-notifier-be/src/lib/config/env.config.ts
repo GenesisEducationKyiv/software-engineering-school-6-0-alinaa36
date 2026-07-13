@@ -46,7 +46,6 @@ export const config = {
   },
   github: {
     token: parsedEnv.GITHUB_TOKEN,
-    graphqlUrl: 'https://api.github.com/graphql',
   },
   mail: {
     host: parsedEnv.SMTP_HOST,

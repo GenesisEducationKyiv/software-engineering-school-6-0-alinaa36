@@ -3,16 +3,16 @@ import type {
   IJobQueue,
   IScheduledTask,
   IScheduler,
-  ISubscriptionServiceForScanner,
-} from '../interfaces/notifier.interfaces';
+  IRepositorySource,
+} from '../interfaces/scheduler.interfaces';
 
 const SCAN_CRON_EXPRESSION = '* * * * *';
 
-export class ScannerService {
+export class SchedulerService {
   private cronTask: IScheduledTask | null = null;
 
   constructor(
-    private readonly subscriptionService: ISubscriptionServiceForScanner,
+    private readonly repositorySource: IRepositorySource,
     private readonly scheduler: IScheduler,
     private readonly jobQueue: IJobQueue,
   ) {}
@@ -37,14 +37,13 @@ export class ScannerService {
 
   stop(): void {
     if (!this.cronTask) return;
-
-    this.scheduler.stop(this.cronTask);
+    this.cronTask.stop();
     this.cronTask = null;
     Logger.info('[Cron] Scheduler stopped.');
   }
 
   private async generateJobs(): Promise<void> {
-    const repos = await this.subscriptionService.groupByRepository();
+    const repos = await this.repositorySource.groupByRepository();
 
     if (repos.length === 0) {
       Logger.info('[Cron] No repositories found, nothing to scan.');

@@ -1,43 +1,38 @@
 import { config } from '../../../lib/config/env.config';
 import type { EmailProvider } from '../interfaces/provider.interface';
-import { EtherealProvider } from '../mail.provider';
+import type {
+  INotifierService,
+  ReleaseNotificationPayload,
+} from '../interfaces/notifier.interface';
 import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.template';
 
-export class NotifierService {
-  constructor(private provider: EmailProvider) {}
+export class NotifierService implements INotifierService {
+  private readonly baseUrl = config.app.url;
 
-  async sendReleaseNotification(
-    email: string,
-    repoFullName: string,
-    tagName: string,
-    unsubscribeToken: string,
-  ): Promise<void> {
-    const baseUrl = config.app.url;
-    const unsubscribeUrl = `${baseUrl}/api/unsubscribe/${unsubscribeToken}`;
+  constructor(private readonly provider: EmailProvider) {}
 
-    const htmlContent = getReleaseEmailTemplate(repoFullName, tagName, unsubscribeUrl);
-    const subject = `Новий реліз: ${repoFullName} ${tagName}`;
+  async sendReleaseNotification({
+    email,
+    repo,
+    tag,
+    unsubscribeToken,
+  }: ReleaseNotificationPayload): Promise<void> {
+    const unsubscribeUrl = `${this.baseUrl}/api/unsubscribe/${unsubscribeToken}`;
 
     await this.provider.sendEmail({
       to: email,
-      subject,
-      html: htmlContent,
+      subject: `Новий реліз: ${repo} ${tag}`,
+      html: getReleaseEmailTemplate(repo, tag, unsubscribeUrl),
     });
   }
 
   async sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void> {
-    const baseUrl = config.app.url;
-    const confirmUrl = `${baseUrl}/api/confirm/${token}`;
-
-    const htmlContent = getConfirmationEmailTemplate(repoFullName, confirmUrl);
-    const subject = `Підтвердіть підписку на ${repoFullName}`;
+    const confirmUrl = `${this.baseUrl}/api/confirm/${token}`;
 
     await this.provider.sendEmail({
       to: email,
-      subject,
-      html: htmlContent,
+      subject: `Підтвердіть підписку на ${repoFullName}`,
+      html: getConfirmationEmailTemplate(repoFullName, confirmUrl),
     });
   }
 }
-
-export const notifierService = new NotifierService(new EtherealProvider());

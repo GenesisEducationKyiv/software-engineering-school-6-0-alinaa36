@@ -39,6 +39,8 @@
     "dotenv": "^17.4.1",
     "fastify": "^5.8.4",
     "fastify-plugin": "^5.1.0",
+    "graphql": "^16.14.0",
+    "graphql-request": "^7.4.0",
     "ioredis": "^5.10.1",
     "js-yaml": "^4.1.1",
     "node-cron": "^4.2.1",

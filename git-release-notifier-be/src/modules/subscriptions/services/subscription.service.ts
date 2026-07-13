@@ -1,34 +1,35 @@
-import { activeSubscriptionsGauge } from '../../../lib/metrics/metrics';
-import { ConflictError, NotFoundError } from '../../../lib/errors/app.error';
-import type { GithubService } from '../../github/services/github.service';
-import type { NotifierService } from '../../sender/services/mail.service';
+import type { IMetricsGauge } from '../../../lib/metrics/metrics';
+import { ConflictError, ErrorCode, NotFoundError } from '../../../lib/errors/app.error';
 import type {
   ISubscriptionRepository,
+  SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
-import type { Subscription } from '@prisma/client';
+import type { INotifierService } from '../../sender/interfaces/notifier.interface';
+import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
 
 export class SubscriptionService {
   constructor(
     private readonly subscriptionRepository: ISubscriptionRepository,
-    private readonly githubService: GithubService,
-    private readonly notifier: NotifierService,
+    private readonly repoProvider: IRepositoryProvider,
+    private readonly notifier: INotifierService,
+    private readonly activeGauge: IMetricsGauge,
   ) {}
 
-  async subscribeToRepo(email: string, repository: string): Promise<Subscription> {
+  async subscribeToRepo(email: string, repository: string): Promise<SubscriptionEntity> {
     const isAlreadySubscribed = await this.subscriptionRepository.checkIfActiveExists(
       email,
       repository,
     );
 
     if (isAlreadySubscribed) {
-      throw new ConflictError('Ви вже підписані на цей репозиторій');
+      throw new ConflictError(ErrorCode.ALREADY_SUBSCRIBED);
     }
 
-    const repoData = await this.githubService.getLatestReleasesBatch([repository]);
+    const exists = await this.repoProvider.exists(repository);
 
-    if (repoData[repository] === undefined) {
-      throw new NotFoundError(`Репозиторій ${repository} не знайдено`);
+    if (!exists) {
+      throw new NotFoundError(ErrorCode.REPOSITORY_NOT_FOUND);
     }
 
     const subscription = await this.subscriptionRepository.upsertPending(email, repository);
@@ -37,15 +38,15 @@ export class SubscriptionService {
     return subscription;
   }
 
-  async confirmSubscription(token: string): Promise<Subscription> {
+  async confirmSubscription(token: string): Promise<SubscriptionEntity> {
     const subscription = await this.subscriptionRepository.findByConfirmToken(token);
 
     if (!subscription) {
-      throw new NotFoundError('Недійсний токен підтвердження');
+      throw new NotFoundError(ErrorCode.INVALID_CONFIRM_TOKEN);
     }
 
     if (subscription.status === 'ACTIVE') {
-      throw new ConflictError('Ви вже підписані на цей репозиторій');
+      throw new ConflictError(ErrorCode.ALREADY_SUBSCRIBED);
     }
 
     const updatedSubscription = await this.subscriptionRepository.activate(subscription.id);
@@ -54,11 +55,11 @@ export class SubscriptionService {
     return updatedSubscription;
   }
 
-  async unsubscribeFromRepo(token: string): Promise<Subscription> {
+  async unsubscribeFromRepo(token: string): Promise<SubscriptionEntity> {
     const subscription = await this.subscriptionRepository.findByUnsubscribeToken(token);
 
     if (!subscription) {
-      throw new NotFoundError('Недійсний токен відписки');
+      throw new NotFoundError(ErrorCode.INVALID_UNSUBSCRIBE_TOKEN);
     }
 
     const deleted = await this.subscriptionRepository.delete(subscription.id);
@@ -77,6 +78,6 @@ export class SubscriptionService {
 
   private async syncActiveGauge(): Promise<void> {
     const count = await this.subscriptionRepository.countActive();
-    activeSubscriptionsGauge.set(count);
+    this.activeGauge.set(count);
   }
 }

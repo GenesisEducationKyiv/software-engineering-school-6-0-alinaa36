@@ -3,27 +3,34 @@ import { prisma } from '../../../lib/prisma';
 import type {
   ISubscriptionRepository,
   RepositoryGroup,
+  SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
+import type { OutdatedSubscriber } from '../../../workers/scanner/types/scanner.type';
+import type { IScannerSubscriptionRepository } from '../../../workers/scanner/interfaces/scanner.interfaces';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',
   ACTIVE = 'ACTIVE',
 }
 
-export class SubscriptionRepository implements ISubscriptionRepository {
-  async upsertPending(email: string, repository: string): Promise<Subscription> {
-    return prisma.subscription.upsert({
+export class SubscriptionRepository
+  implements ISubscriptionRepository, IScannerSubscriptionRepository
+{
+  async upsertPending(email: string, repository: string): Promise<SubscriptionEntity> {
+    const raw = await prisma.subscription.upsert({
       where: { email_repository: { email, repository } },
       update: { status: SubscriptionStatus.PENDING },
       create: { email, repository, status: SubscriptionStatus.PENDING },
     });
+
+    return this.toEntity(raw);
   }
 
-  async findByConfirmToken(token: string): Promise<Subscription | null> {
-    return prisma.subscription.findUnique({
-      where: { confirmToken: token },
-    });
+  async findByConfirmToken(token: string): Promise<SubscriptionEntity | null> {
+    const raw = await prisma.subscription.findUnique({ where: { confirmToken: token } });
+
+    return raw ? this.toEntity(raw) : null;
   }
 
   async checkIfActiveExists(email: string, repository: string): Promise<boolean> {
@@ -34,30 +41,37 @@ export class SubscriptionRepository implements ISubscriptionRepository {
     return !!existing;
   }
 
-  async activate(id: string): Promise<Subscription> {
-    return prisma.subscription.update({
+  async activate(id: string): Promise<SubscriptionEntity> {
+    const raw = await prisma.subscription.update({
       where: { id },
       data: { status: SubscriptionStatus.ACTIVE },
     });
+
+    return this.toEntity(raw);
   }
 
-  async findByUnsubscribeToken(token: string): Promise<Subscription | null> {
-    return prisma.subscription.findUnique({
-      where: { unsubscribeToken: token },
-    });
+  async findByUnsubscribeToken(token: string): Promise<SubscriptionEntity | null> {
+    const raw = await prisma.subscription.findUnique({ where: { unsubscribeToken: token } });
+
+    return raw ? this.toEntity(raw) : null;
   }
 
-  async delete(id: string): Promise<Subscription> {
-    return prisma.subscription.delete({
-      where: { id },
-    });
+  async delete(id: string): Promise<SubscriptionEntity> {
+    const raw = await prisma.subscription.delete({ where: { id } });
+
+    return this.toEntity(raw);
   }
 
   async findByEmail(email: string): Promise<SubscriptionSummary[]> {
-    return prisma.subscription.findMany({
+    const rows = await prisma.subscription.findMany({
       where: { email },
       select: { repository: true, status: true, createdAt: true },
     });
+
+    return rows.map((row) => ({
+      ...row,
+      status: row.status as SubscriptionEntity['status'],
+    }));
   }
 
   async countActive(): Promise<number> {
@@ -75,5 +89,30 @@ export class SubscriptionRepository implements ISubscriptionRepository {
       repository: row.repository,
       count: row._count.repository,
     }));
+  }
+
+  async getOutdatedSubscribers(repoName: string, newTag: string): Promise<OutdatedSubscriber[]> {
+    return prisma.subscription.findMany({
+      where: {
+        repository: repoName,
+        status: SubscriptionStatus.ACTIVE,
+        OR: [{ lastSeenTag: { not: newTag } }, { lastSeenTag: null }],
+      },
+      select: { id: true, email: true, unsubscribeToken: true },
+    });
+  }
+
+  async updateTags(subscriberIds: string[], newTag: string): Promise<void> {
+    await prisma.subscription.updateMany({
+      where: { id: { in: subscriberIds } },
+      data: { lastSeenTag: newTag },
+    });
+  }
+
+  private toEntity(raw: Subscription): SubscriptionEntity {
+    return {
+      ...raw,
+      status: raw.status as SubscriptionEntity['status'],
+    };
   }
 }

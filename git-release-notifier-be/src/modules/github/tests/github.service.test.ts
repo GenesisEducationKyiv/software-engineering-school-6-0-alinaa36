@@ -1,223 +1,172 @@
-import { describe, it, expect, vi } from 'vitest';
-import { GithubService } from '../services/github.service';
-import { GithubError } from '../../../lib/errors/app.error';
-import { GithubQueryBuilder } from '../query/github-query.builder';
-import { GithubResponseParser } from '../query/github-response.parser';
-import type { IGithubHttpClient } from '../client/github.client';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mocked } from 'vitest';
+import { CachedGithubClient } from '../decorators/cached-github.decorator';
+import type { IGithubClient } from '../interfaces/github-client.interface';
 import type { ICacheRepository } from '../../common/cache/cache-repository.interface';
-import type { GithubGraphQLResponse, GithubRepositoryNode } from '../types/github-info.type';
+import type { BatchReleaseResult } from '../types/github-info.type';
+import { REDIS_CACHE_TTL_SECONDS } from '../../common/constants/api.constants';
 
-vi.mock('../../../lib/logger/logger', () => ({
-  Logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-}));
+// ---- helpers ----
 
-function makeGraphQLResponse(
-  repos: Array<{ nameWithOwner: string; tagName: string | null }>,
-): GithubGraphQLResponse {
-  const data: Record<string, GithubRepositoryNode | null> = {};
-  repos.forEach((repo, i) => {
-    data[`repo${i}`] = {
-      nameWithOwner: repo.nameWithOwner,
-      latestRelease: repo.tagName ? { tagName: repo.tagName } : null,
-    };
-  });
+const RELEASES: BatchReleaseResult = {
+  'facebook/react': 'v18.0.0',
+  'vuejs/vue': 'v3.0.0',
+};
 
-  return { data };
+function makeClient(releases: BatchReleaseResult = {}): Mocked<IGithubClient> {
+  return {
+    getLatestReleasesBatch: vi.fn().mockResolvedValue(releases),
+  };
 }
 
-function makeService(overrides: {
-  httpClient?: Partial<IGithubHttpClient>;
-  cache?: Partial<ICacheRepository>;
-}) {
-  const httpClient = {
-    executeQuery: vi.fn(),
-    ...overrides.httpClient,
-  } satisfies IGithubHttpClient;
-
-  const cache = {
-    get: vi.fn().mockResolvedValue(null),
+function makeCache(cached: BatchReleaseResult | null = null): Mocked<ICacheRepository> {
+  return {
+    get: vi.fn().mockResolvedValue(cached),
     set: vi.fn().mockResolvedValue(undefined),
-    ...overrides.cache,
-  } satisfies ICacheRepository;
+  };
+}
 
-  const service = new GithubService(
-    httpClient,
-    cache,
-    new GithubQueryBuilder(),
-    new GithubResponseParser(),
-  );
+function makeDecorator(
+  options: {
+    releases?: BatchReleaseResult;
+    cached?: BatchReleaseResult | null;
+  } = {},
+) {
+  const client = makeClient(options.releases ?? {});
+  const cache = makeCache(options.cached ?? null);
+  const decorator = new CachedGithubClient(client, cache);
 
-  return { service, httpClient, cache };
+  return { decorator, client, cache };
 }
 
 // ---- тести ----
 
-describe('GithubService.getLatestReleasesBatch', () => {
-  // --- кеш ---
+describe('CachedGithubClient', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  describe('кешування', () => {
-    it('повертає дані з кешу якщо вони є', async () => {
-      const cachedData = { 'user/repo': 'v1.0.0' };
-      const { service } = makeService({
-        cache: { get: vi.fn().mockResolvedValue(cachedData) },
-      });
+  describe('кеш-хіт — дані вже закешовані', () => {
+    it('повертає закешований результат', async () => {
+      const { decorator } = makeDecorator({ cached: RELEASES });
 
-      const result = await service.getLatestReleasesBatch(['user/repo']);
+      const result = await decorator.getLatestReleasesBatch(['facebook/react']);
 
-      expect(result).toEqual(cachedData);
+      expect(result).toEqual(RELEASES);
     });
 
-    it('не робить запит до GitHub якщо дані є в кеші', async () => {
-      const cachedData = { 'user/repo': 'v1.0.0' };
-      const { service, httpClient } = makeService({
-        cache: { get: vi.fn().mockResolvedValue(cachedData) },
-      });
+    it('не звертається до GitHub', async () => {
+      const { decorator, client } = makeDecorator({ cached: RELEASES });
 
-      await service.getLatestReleasesBatch(['user/repo']);
+      await decorator.getLatestReleasesBatch(['facebook/react']);
 
-      expect(httpClient.executeQuery).not.toHaveBeenCalled();
+      expect(client.getLatestReleasesBatch).not.toHaveBeenCalled();
+    });
+
+    it('не перезаписує кеш', async () => {
+      const { decorator, cache } = makeDecorator({ cached: RELEASES });
+
+      await decorator.getLatestReleasesBatch(['facebook/react']);
+
+      expect(cache.set).not.toHaveBeenCalled();
     });
   });
 
-  // --- граничні випадки вхідних даних ---
+  describe('кеш-міс — даних у кеші немає', () => {
+    it('звертається до GitHub з переданими репозиторіями', async () => {
+      const { decorator, client } = makeDecorator({ releases: RELEASES });
 
-  describe('вхідні дані', () => {
-    it('повертає порожній обʼєкт для порожнього масиву', async () => {
-      const { service } = makeService({});
+      await decorator.getLatestReleasesBatch(['facebook/react', 'vuejs/vue']);
 
-      const result = await service.getLatestReleasesBatch([]);
-
-      expect(result).toEqual({});
-    });
-
-    it('не робить запит до GitHub для порожнього масиву', async () => {
-      const { service, httpClient } = makeService({});
-
-      await service.getLatestReleasesBatch([]);
-
-      expect(httpClient.executeQuery).not.toHaveBeenCalled();
-    });
-
-    it('не звертається до кешу для порожнього масиву', async () => {
-      const { service, cache } = makeService({});
-
-      await service.getLatestReleasesBatch([]);
-
-      expect(cache.get).not.toHaveBeenCalled();
+      expect(client.getLatestReleasesBatch).toHaveBeenCalledWith(['facebook/react', 'vuejs/vue']);
     });
   });
 
-  // --- парсинг відповіді ---
+    it('повертає результат від GitHub', async () => {
+      const { decorator } = makeDecorator({ releases: RELEASES });
 
-  describe('парсинг відповіді GitHub API', () => {
-    it('повертає теги для репозиторіїв з релізами', async () => {
-      const { service, httpClient } = makeService({});
+      const result = await decorator.getLatestReleasesBatch(['facebook/react']);
 
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([
-          { nameWithOwner: 'facebook/react', tagName: 'v18.0.0' },
-          { nameWithOwner: 'vuejs/vue', tagName: 'v3.0.0' },
-        ]),
-      );
-
-      const result = await service.getLatestReleasesBatch(['facebook/react', 'vuejs/vue']);
-
-      expect(result).toEqual({
-        'facebook/react': 'v18.0.0',
-        'vuejs/vue': 'v3.0.0',
-      });
+      expect(result).toEqual(RELEASES);
     });
 
-    it('повертає null для репозиторію без релізів', async () => {
-      const { service, httpClient } = makeService({});
+    it('зберігає результат у кеш з коректним TTL', async () => {
+      const { decorator, cache } = makeDecorator({ releases: RELEASES });
 
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([{ nameWithOwner: 'user/empty-repo', tagName: null }]),
-      );
+      await decorator.getLatestReleasesBatch(['facebook/react']);
 
-      const result = await service.getLatestReleasesBatch(['user/empty-repo']);
-
-      expect(result).toEqual({ 'user/empty-repo': null });
+      expect(cache.set).toHaveBeenCalledWith(expect.any(String), RELEASES, REDIS_CACHE_TTL_SECONDS);
     });
 
-    it('коректно обробляє змішані результати — є реліз і немає', async () => {
-      const { service, httpClient } = makeService({});
+    it('зберігає у кеш рівно один раз', async () => {
+      const { decorator, cache } = makeDecorator({ releases: RELEASES });
 
-      vi.mocked(httpClient.executeQuery).mockResolvedValue(
-        makeGraphQLResponse([
-          { nameWithOwner: 'user/active', tagName: 'v2.0.0' },
-          { nameWithOwner: 'user/empty', tagName: null },
-        ]),
-      );
+      await decorator.getLatestReleasesBatch(['facebook/react']);
 
-      const result = await service.getLatestReleasesBatch(['user/active', 'user/empty']);
-
-      expect(result).toEqual({ 'user/active': 'v2.0.0', 'user/empty': null });
+      expect(cache.set).toHaveBeenCalledTimes(1);
     });
 
-    it('ігнорує null-вузли у відповіді GraphQL', async () => {
-      const { service, httpClient } = makeService({});
+    it('коректно обробляє репозиторій без жодного релізу', async () => {
+      const releasesWithNull: BatchReleaseResult = { 'user/new-repo': null };
+      const { decorator } = makeDecorator({ releases: releasesWithNull });
 
-      vi.mocked(httpClient.executeQuery).mockResolvedValue({
-        data: {
-          repo0: null,
-          repo1: { nameWithOwner: 'user/repo', latestRelease: { tagName: 'v1.0.0' } },
-        },
-      });
+      const result = await decorator.getLatestReleasesBatch(['user/new-repo']);
 
-      const result = await service.getLatestReleasesBatch(['user/deleted', 'user/repo']);
-
-      expect(result).toEqual({ 'user/repo': 'v1.0.0' });
-      expect(result['user/deleted']).toBeUndefined();
+      expect(result).toEqual(releasesWithNull);
     });
   });
 
-  // --- помилки ---
+  describe('ключ кешу', () => {
+    it('однаковий ключ незалежно від порядку репозиторіїв', async () => {
+      const { decorator, cache } = makeDecorator();
+
+      await decorator.getLatestReleasesBatch(['b/repo', 'a/repo']);
+      await decorator.getLatestReleasesBatch(['a/repo', 'b/repo']);
+
+      const firstKey = cache.get.mock.calls[0][0];
+      const secondKey = cache.get.mock.calls[1][0];
+
+      expect(firstKey).toBe(secondKey);
+    });
+
+    it('різні набори репозиторіїв мають різні ключі', async () => {
+      const { decorator, cache } = makeDecorator();
+
+      await decorator.getLatestReleasesBatch(['user/repo-a']);
+      await decorator.getLatestReleasesBatch(['user/repo-b']);
+
+      const firstKey = cache.get.mock.calls[0][0];
+      const secondKey = cache.get.mock.calls[1][0];
+
+      expect(firstKey).not.toBe(secondKey);
+    });
+
+    it('ключ містить ідентифікуючий префікс', async () => {
+      const { decorator, cache } = makeDecorator();
+
+      await decorator.getLatestReleasesBatch(['user/repo']);
+
+      expect(cache.get.mock.calls[0][0]).toMatch(/^cache:github:releases:/);
+    });
+  });
 
   describe('обробка помилок', () => {
-    it('пробрасовує GithubError від httpClient', async () => {
-      const { service, httpClient } = makeService({});
+    it('пробрасовує помилку від GitHub клієнта', async () => {
+      const { decorator, client } = makeDecorator();
+      client.getLatestReleasesBatch.mockRejectedValue(new Error('GitHub API error'));
 
-      vi.mocked(httpClient.executeQuery).mockRejectedValue(
-        new GithubError('GraphQL API Error: Unauthorized', 401),
+      await expect(decorator.getLatestReleasesBatch(['user/repo'])).rejects.toThrow(
+        'GitHub API error',
       );
-
-      await expect(service.getLatestReleasesBatch(['user/repo'])).rejects.toThrow(GithubError);
     });
 
-    it('GithubError містить HTTP статус код', async () => {
-      const { service, httpClient } = makeService({});
+    it('не зберігає дані в кеш якщо запит до GitHub провалився', async () => {
+      const { decorator, client, cache } = makeDecorator();
+      client.getLatestReleasesBatch.mockRejectedValue(new Error('Network error'));
 
-      vi.mocked(httpClient.executeQuery).mockRejectedValue(
-        new GithubError('GraphQL API Error: Not Found', 404),
-      );
+      await decorator.getLatestReleasesBatch(['user/repo']).catch(() => {});
 
-      await expect(service.getLatestReleasesBatch(['user/repo'])).rejects.toMatchObject({
-        statusCode: 404,
-      });
-    });
-
-    it('не зберігає дані в кеш якщо запит провалився', async () => {
-      const setCacheMock = vi.fn();
-      const { service, httpClient } = makeService({
-        cache: { set: setCacheMock },
-      });
-
-      vi.mocked(httpClient.executeQuery).mockRejectedValue(
-        new GithubError('GraphQL API Error: Server Error', 500),
-      );
-
-      await service.getLatestReleasesBatch(['user/repo']).catch(() => {});
-
-      expect(setCacheMock).not.toHaveBeenCalled();
-    });
-
-    it('пробрасовує мережеву помилку від httpClient', async () => {
-      const { service, httpClient } = makeService({});
-
-      vi.mocked(httpClient.executeQuery).mockRejectedValue(new Error('Network error'));
-
-      await expect(service.getLatestReleasesBatch(['user/repo'])).rejects.toThrow('Network error');
+      expect(cache.set).not.toHaveBeenCalled();
     });
   });
 });

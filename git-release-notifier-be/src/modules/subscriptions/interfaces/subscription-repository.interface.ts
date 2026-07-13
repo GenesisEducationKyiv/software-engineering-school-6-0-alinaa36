@@ -1,19 +1,32 @@
-import type { Subscription } from '@prisma/client';
+export interface SubscriptionEntity {
+  id: string;
+  email: string;
+  repository: string;
+  status: 'PENDING' | 'ACTIVE';
+  confirmToken: string;
+  unsubscribeToken: string;
+  lastSeenTag: string | null;
+  createdAt: Date;
+}
+
+export interface SubscriptionSummary {
+  repository: string;
+  status: 'PENDING' | 'ACTIVE';
+  createdAt: Date;
+}
 
 export interface RepositoryGroup {
   repository: string;
   count: number;
 }
 
-export type SubscriptionSummary = Pick<Subscription, 'repository' | 'status' | 'createdAt'>;
-
 export interface ISubscriptionRepository {
   checkIfActiveExists(email: string, repository: string): Promise<boolean>;
-  upsertPending(email: string, repository: string): Promise<Subscription>;
-  findByConfirmToken(token: string): Promise<Subscription | null>;
-  activate(id: string): Promise<Subscription>;
-  findByUnsubscribeToken(token: string): Promise<Subscription | null>;
-  delete(id: string): Promise<Subscription>;
+  upsertPending(email: string, repository: string): Promise<SubscriptionEntity>;
+  findByConfirmToken(token: string): Promise<SubscriptionEntity | null>;
+  activate(id: string): Promise<SubscriptionEntity>;
+  findByUnsubscribeToken(token: string): Promise<SubscriptionEntity | null>;
+  delete(id: string): Promise<SubscriptionEntity>;
   findByEmail(email: string): Promise<SubscriptionSummary[]>;
   countActive(): Promise<number>;
   groupByRepository(): Promise<RepositoryGroup[]>;

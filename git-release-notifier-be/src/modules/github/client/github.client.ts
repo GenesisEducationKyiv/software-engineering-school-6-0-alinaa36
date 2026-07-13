@@ -1,33 +1,40 @@
-import type { GithubGraphQLResponse } from '../types/github-info.type';
 import { GITHUB_GRAPHQL_URL } from '../../common/constants/api.constants';
-import { GithubError } from '../../../lib/errors/app.error';
-import { config } from '../../../lib/config/env.config';
+import { GraphQLClient } from 'graphql-request';
+import type { BatchReleaseResult, GithubRepositoryNode } from '../types/github-info.type';
+import { buildLatestReleasesQuery, parseLatestReleases } from '../query/latest-releases';
+import type { IGithubClient } from '../interfaces/github-client.interface';
+import { ErrorCode, GithubError, GithubRateLimitError } from '../../../lib/errors/app.error';
 
-export interface IGithubHttpClient {
-  executeQuery(query: string): Promise<GithubGraphQLResponse>;
-}
+export class GithubClient implements IGithubClient {
+  private readonly client: GraphQLClient;
 
-export class GithubHttpClient implements IGithubHttpClient {
-  constructor(private readonly getHeaders: () => Record<string, string>) {}
-
-  static create(): GithubHttpClient {
-    return new GithubHttpClient(() => ({
-      Authorization: `Bearer ${config.github.token}`,
-      'Content-Type': 'application/json',
-    }));
+  constructor(token: string) {
+    this.client = new GraphQLClient(GITHUB_GRAPHQL_URL, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      errorPolicy: 'all',
+    });
   }
 
-  async executeQuery(query: string): Promise<GithubGraphQLResponse> {
-    const response = await fetch(GITHUB_GRAPHQL_URL, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ query }),
-    });
+  async getLatestReleasesBatch(repos: string[]): Promise<BatchReleaseResult> {
+    try {
+      const query = buildLatestReleasesQuery(repos);
+      const data = await this.client.request<Record<string, GithubRepositoryNode | null>>(query);
 
-    if (!response.ok) {
-      throw new GithubError(`GraphQL API Error: ${response.statusText}`, response.status);
+      return parseLatestReleases(data);
+    } catch (error) {
+      if (this.isRateLimited(error)) {
+        throw new GithubRateLimitError({ cause: error });
+      }
+
+      throw new GithubError(ErrorCode.GITHUB_UNAVAILABLE, { cause: error });
     }
+  }
 
-    return response.json() as Promise<GithubGraphQLResponse>;
+  private isRateLimited(error: unknown): boolean {
+    const status = (error as { response?: { status?: number } }).response?.status;
+
+    return status === 403 || status === 429;
   }
 }

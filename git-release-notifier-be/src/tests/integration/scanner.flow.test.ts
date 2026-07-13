@@ -4,15 +4,11 @@ import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import { config } from '../../lib/config/env.config';
 import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
-import { GithubHttpClient } from '../../modules/github/client/github.client';
-import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
-import { GithubResponseParser } from '../../modules/github/query/github-response.parser';
-import { GithubService } from '../../modules/github/services/github.service';
+import { GithubClient } from '../../modules/github/client/github.client';
+import { CachedGithubClient } from '../../modules/github/decorators/cached-github.decorator';
 import { ScanBatchProcessor } from '../../workers/scanner/scanner.processor';
-import {
-  GithubReleaseAdapter,
-  PrismaSubscriptionAdapter,
-} from '../../workers/scanner/adapters/scanner.adapters';
+import { GithubReleaseAdapter } from '../../workers/scanner/infrastructure/adapters/github-release-source-provider.adapter';
+import { SubscriptionRepository } from '../../modules/subscriptions/repositories/subscription.repository';
 import type { INotifier } from '../../workers/scanner/interfaces/scanner.interfaces';
 import type Redis from 'ioredis';
 import { randomUUID } from 'crypto';
@@ -77,20 +73,15 @@ function makeNotifier(): INotifier {
   } satisfies INotifier;
 }
 
-function makeProcessor(notifier: INotifier) {
-  const githubService = new GithubService(
-    new GithubHttpClient(() => ({
-      Authorization: `Bearer ${config.github.token}`,
-      'Content-Type': 'application/json',
-    })),
-    new RedisCacheRepository(),
-    new GithubQueryBuilder(),
-    new GithubResponseParser(),
+function makeProcessor(notifier: INotifier, redis: Redis) {
+  const githubClient = new CachedGithubClient(
+    new GithubClient(config.github.token),
+    new RedisCacheRepository(redis),
   );
 
   return new ScanBatchProcessor({
-    provider: new GithubReleaseAdapter(githubService),
-    repository: new PrismaSubscriptionAdapter(),
+    provider: new GithubReleaseAdapter(githubClient),
+    repository: new SubscriptionRepository(),
     notifier,
   });
 }
@@ -159,7 +150,7 @@ describe('ScanBatchProcessor integration', () => {
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
       const notifier = makeNotifier();
-      await makeProcessor(notifier).process([TEST_REPO]);
+      await makeProcessor(notifier, redis).process([TEST_REPO]);
 
       expect(notifier.sendReleaseNotification).toHaveBeenCalledWith({
         email: TEST_EMAIL,
@@ -174,7 +165,7 @@ describe('ScanBatchProcessor integration', () => {
       const sub = await createActiveSubscription(prisma);
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
-      await makeProcessor(makeNotifier()).process([TEST_REPO]);
+      await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(updated?.lastSeenTag).toBe(NEW_TAG);
@@ -189,7 +180,7 @@ describe('ScanBatchProcessor integration', () => {
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
       const notifier = makeNotifier();
-      await makeProcessor(notifier).process([TEST_REPO]);
+      await makeProcessor(notifier, redis).process([TEST_REPO]);
 
       expect(notifier.sendReleaseNotification).not.toHaveBeenCalled();
       expect(nock.isDone()).toBe(true);
@@ -199,7 +190,7 @@ describe('ScanBatchProcessor integration', () => {
       const sub = await createActiveSubscription(prisma, { lastSeenTag: NEW_TAG });
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
-      await makeProcessor(makeNotifier()).process([TEST_REPO]);
+      await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const unchanged = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(unchanged?.lastSeenTag).toBe(NEW_TAG);
@@ -218,7 +209,7 @@ describe('ScanBatchProcessor integration', () => {
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
       const notifier = makeNotifier();
-      await makeProcessor(notifier).process([TEST_REPO]);
+      await makeProcessor(notifier, redis).process([TEST_REPO]);
 
       expect(notifier.sendReleaseNotification).toHaveBeenCalledWith({
         email: TEST_EMAIL,
@@ -237,7 +228,7 @@ describe('ScanBatchProcessor integration', () => {
       });
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
-      await makeProcessor(makeNotifier()).process([TEST_REPO]);
+      await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(updated?.lastSeenTag).toBe(NEW_TAG);
@@ -252,7 +243,7 @@ describe('ScanBatchProcessor integration', () => {
       mockGithubNoRelease(TEST_REPO);
 
       const notifier = makeNotifier();
-      await makeProcessor(notifier).process([TEST_REPO]);
+      await makeProcessor(notifier, redis).process([TEST_REPO]);
 
       expect(notifier.sendReleaseNotification).not.toHaveBeenCalled();
       expect(nock.isDone()).toBe(true);
@@ -262,7 +253,7 @@ describe('ScanBatchProcessor integration', () => {
       const sub = await createActiveSubscription(prisma);
       mockGithubNoRelease(TEST_REPO);
 
-      await makeProcessor(makeNotifier()).process([TEST_REPO]);
+      await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const unchanged = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(unchanged?.lastSeenTag).toBe(OLD_TAG);
@@ -286,7 +277,7 @@ describe('ScanBatchProcessor integration', () => {
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
       const notifier = makeNotifier();
-      await makeProcessor(notifier).process([TEST_REPO]);
+      await makeProcessor(notifier, redis).process([TEST_REPO]);
 
       expect(notifier.sendReleaseNotification).toHaveBeenCalledTimes(2);
       expect(nock.isDone()).toBe(true);
@@ -305,7 +296,7 @@ describe('ScanBatchProcessor integration', () => {
       });
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
-      await makeProcessor(makeNotifier()).process([TEST_REPO]);
+      await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const updated1 = await prisma.subscription.findUnique({ where: { id: sub1.id } });
       const updated2 = await prisma.subscription.findUnique({ where: { id: sub2.id } });

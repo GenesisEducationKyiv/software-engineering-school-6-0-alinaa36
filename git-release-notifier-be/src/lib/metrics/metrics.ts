@@ -2,8 +2,6 @@ import client from 'prom-client';
 
 export interface IMetricsGauge {
   set(value: number): void;
-  inc(value?: number): void;
-  dec(value?: number): void;
 }
 
 export const register = new client.Registry();
