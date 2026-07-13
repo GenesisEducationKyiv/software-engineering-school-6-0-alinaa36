@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import nock from 'nock';
 import type { FastifyInstance } from 'fastify';
+import { config } from '../../lib/config/env.config';
+import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
+import { GithubHttpClient } from '../../modules/github/client/github.client';
+import { GithubQueryBuilder } from '../../modules/github/query/github-query.builder';
+import { GithubResponseParser } from '../../modules/github/query/github-response.parser';
+import { GithubService } from '../../modules/github/services/github.service';
 
 vi.mock('../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
@@ -71,14 +77,23 @@ describe('Scanner Pipeline (Вимога 3)', () => {
     const { ScanBatchProcessor } = await import('../../workers/scanner/scanner.processor');
     const { GithubReleaseAdapter, PrismaSubscriptionAdapter } =
       await import('../../workers/scanner/adapters/scanner.adapters');
-    const { GithubService } = await import('../../modules/github/services/github.service');
 
     const mockNotifier = {
       sendReleaseNotification: vi.fn().mockResolvedValue(undefined),
     };
 
     const processor = new ScanBatchProcessor({
-      provider: new GithubReleaseAdapter(new GithubService()),
+      provider: new GithubReleaseAdapter(
+        new GithubService(
+          new GithubHttpClient(() => ({
+            Authorization: `Bearer ${config.github.token}`,
+            'Content-Type': 'application/json',
+          })),
+          new RedisCacheRepository(),
+          new GithubQueryBuilder(),
+          new GithubResponseParser(),
+        ),
+      ),
       repository: new PrismaSubscriptionAdapter(),
       notifier: mockNotifier,
     });

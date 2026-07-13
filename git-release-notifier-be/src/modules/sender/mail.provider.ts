@@ -1,5 +1,4 @@
 import nodemailer from 'nodemailer';
-import 'dotenv/config';
 import { SendEmailOptions } from './types/sender-options.type';
 import { EmailProvider } from './interfaces/provider.interface';
 import { Logger } from '../../lib/logger/logger';

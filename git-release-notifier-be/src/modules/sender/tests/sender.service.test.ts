@@ -14,12 +14,12 @@ vi.mock('../mail.provider', () => ({
   }),
 }));
 
-vi.mock('../templates/mail.templa', () => ({
+vi.mock('../templates/mail.template', () => ({
   getReleaseEmailTemplate: vi.fn().mockReturnValue('<html>release</html>'),
   getConfirmationEmailTemplate: vi.fn().mockReturnValue('<html>confirm</html>'),
 }));
 
-import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.templa';
+import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.template';
 import { NotifierService } from '../services/mail.service';
 
 function makeProvider() {

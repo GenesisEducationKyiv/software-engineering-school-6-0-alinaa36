@@ -1,7 +1,7 @@
 import { config } from '../../../lib/config/env.config';
 import { EmailProvider } from '../interfaces/provider.interface';
 import { EtherealProvider } from '../mail.provider';
-import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.templa';
+import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.template';
 
 export class NotifierService {
   constructor(private provider: EmailProvider) {}

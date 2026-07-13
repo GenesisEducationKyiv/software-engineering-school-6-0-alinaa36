@@ -220,4 +220,20 @@ describe('addScanJobs', () => {
       expect(channel.close).toHaveBeenCalledOnce();
     });
   });
+
+  it('не логує успіх якщо sendToQueue повернув false', async () => {
+    channel.sendToQueue.mockReturnValue(false);
+
+    await addScanJobs(['user/repo']);
+
+    expect(channel.close).toHaveBeenCalledOnce();
+  });
+
+  it('закриває channel навіть якщо sendToQueue повернув false', async () => {
+    channel.sendToQueue.mockReturnValue(false);
+
+    await addScanJobs(['user/repo']);
+
+    expect(channel.close).toHaveBeenCalledOnce();
+  });
 });

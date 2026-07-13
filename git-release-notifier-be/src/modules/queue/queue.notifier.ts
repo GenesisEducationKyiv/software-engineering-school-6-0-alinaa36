@@ -30,7 +30,14 @@ export async function addScanJobs(repos: string[]): Promise<void> {
       }
 
       const payload: ScanJobPayload = { repos: batch, lockKey };
-      channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(payload)), { persistent: true });
+      const sent = channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(payload)), {
+        persistent: true,
+      });
+
+      if (!sent) {
+        Logger.warn(`[RabbitMQ] Queue buffer full, batch was not sent.`);
+        continue;
+      }
 
       Logger.info(`[RabbitMQ] Batch of ${batch.length} repositories added to the queue.`);
     }

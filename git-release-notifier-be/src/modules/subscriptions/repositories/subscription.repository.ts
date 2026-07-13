@@ -1,67 +1,80 @@
+import { Subscription } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+import {
+  ISubscriptionRepository,
+  RepositoryGroup,
+} from '../interfaces/subscription-repository.interface';
 
-export class SubscriptionRepository {
-  async upsertPending(email: string, repository: string) {
-    return await prisma.subscription.upsert({
+export enum SubscriptionStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+}
+
+export class SubscriptionRepository implements ISubscriptionRepository {
+  async upsertPending(email: string, repository: string): Promise<Subscription> {
+    return prisma.subscription.upsert({
       where: { email_repository: { email, repository } },
-      update: { status: 'PENDING' },
-      create: { email, repository, status: 'PENDING' },
+      update: { status: SubscriptionStatus.PENDING },
+      create: { email, repository, status: SubscriptionStatus.PENDING },
     });
   }
 
-  async findByConfirmToken(token: string) {
-    return await prisma.subscription.findUnique({
+  async findByConfirmToken(token: string): Promise<Subscription | null> {
+    return prisma.subscription.findUnique({
       where: { confirmToken: token },
     });
   }
 
   async checkIfActiveExists(email: string, repository: string): Promise<boolean> {
     const existing = await prisma.subscription.findFirst({
-      where: {
-        email,
-        repository,
-        status: 'ACTIVE',
-      },
+      where: { email, repository, status: SubscriptionStatus.ACTIVE },
     });
 
     return !!existing;
   }
 
-  async activate(id: string) {
-    return await prisma.subscription.update({
+  async activate(id: string): Promise<Subscription> {
+    return prisma.subscription.update({
       where: { id },
-      data: { status: 'ACTIVE' },
+      data: { status: SubscriptionStatus.ACTIVE },
     });
   }
 
-  async findByUnsubscribeToken(token: string) {
-    return await prisma.subscription.findUnique({
+  async findByUnsubscribeToken(token: string): Promise<Subscription | null> {
+    return prisma.subscription.findUnique({
       where: { unsubscribeToken: token },
     });
   }
 
-  async delete(id: string) {
-    return await prisma.subscription.delete({
+  async delete(id: string): Promise<Subscription> {
+    return prisma.subscription.delete({
       where: { id },
     });
   }
 
-  async findByEmail(email: string) {
-    return await prisma.subscription.findMany({
+  async findByEmail(
+    email: string,
+  ): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]> {
+    return prisma.subscription.findMany({
       where: { email },
       select: { repository: true, status: true, createdAt: true },
     });
   }
 
   async countActive(): Promise<number> {
-    return prisma.subscription.count({ where: { status: 'ACTIVE' } });
+    return prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE } });
   }
 
-  async groupByRepository() {
-    return await prisma.subscription.groupBy({
+  async groupByRepository(): Promise<RepositoryGroup[]> {
+    const rows = await prisma.subscription.groupBy({
       by: ['repository'],
-      where: { status: 'ACTIVE' },
+      where: { status: SubscriptionStatus.ACTIVE },
       _count: { repository: true },
     });
+
+    return rows.map((row) => ({
+      repository: row.repository,
+      count: row._count.repository,
+    }));
   }
 }
