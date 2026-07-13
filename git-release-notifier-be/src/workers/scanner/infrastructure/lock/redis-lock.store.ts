@@ -21,11 +21,13 @@ export class RedisLockStore implements ILockStore {
 
   async unlock(key: string): Promise<void> {
     await this.redis.del(key);
-    Logger.info(`[Redis] Lock ${key} released.`);
+    Logger.debug({ lockKey: key }, '[Redis] Lock released');
   }
 
   private buildLockKey(batch: string[]): string {
-    return `lock:scan:${Buffer.from(batch.join(',')).toString('base64')}`;
+    const canonical = [...batch].sort().join(',');
+
+    return `lock:scan:${Buffer.from(canonical).toString('base64')}`;
   }
 
   private calcDynamicTTL(batchSize: number): number {

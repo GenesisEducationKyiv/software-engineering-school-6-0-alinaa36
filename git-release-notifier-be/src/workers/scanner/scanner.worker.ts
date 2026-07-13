@@ -3,42 +3,51 @@ import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { WorkerConfig } from '../config/worker.config';
 import { createWorkerContainer } from '../../modules/common/plugins/container.factory';
-import type { ScanBatchProcessor } from './scanner.processor';
 import type { ILockStore } from './infrastructure/lock/lock-store.interface';
 import { delay, handleRetry, parsePayload } from './infrastructure/handlers';
+import type { IBatchProcessor } from './interfaces/scanner.interfaces';
 
 async function processMessage(
   msg: ConsumeMessage,
-  processor: ScanBatchProcessor,
+  processor: IBatchProcessor,
   channel: Awaited<ReturnType<typeof createChannel>>,
   lockStore: ILockStore,
 ): Promise<void> {
   const payload = parsePayload(msg);
 
   if (!payload) {
-    Logger.error('[Worker] Invalid message format. Discarding.');
+    Logger.warn(
+      { messageId: msg.properties.messageId },
+      '[Worker] Invalid message format, discarding',
+    );
     channel.ack(msg);
 
     return;
   }
 
   const { repos, lockKey } = payload;
-  Logger.info(`[Worker] Processing ${repos.length} repositories...`);
+  Logger.info({ count: repos.length }, '[Worker] Processing repositories');
 
   try {
     await processor.process(repos);
     channel.ack(msg);
-
-    if (lockKey) {
-      await lockStore.unlock(lockKey);
-    }
-
-    await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
-    Logger.info('[Worker] Batch processed successfully.');
   } catch (error) {
     Logger.error({ err: error }, '[Worker] Processing error');
     await handleRetry(msg, channel);
+
+    return;
   }
+
+  if (lockKey) {
+    try {
+      await lockStore.unlock(lockKey);
+    } catch (err) {
+      Logger.warn({ err, lockKey }, '[Worker] Failed to release lock, will expire via TTL');
+    }
+  }
+
+  await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
+  Logger.info('[Worker] Batch processed successfully.');
 }
 
 async function startWorker(): Promise<void> {

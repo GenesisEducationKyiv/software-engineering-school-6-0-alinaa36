@@ -7,6 +7,8 @@ import type { OpenAPIV2 } from 'openapi-types';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
+import type { Logger as PinoLogger } from 'pino';
+import type { Server, IncomingMessage, ServerResponse } from 'http';
 import { register } from './lib/metrics/metrics';
 import { Logger } from './lib/logger/logger';
 import { errorHandler } from './lib/errors/error.handler';
@@ -19,8 +21,12 @@ import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
 
-export async function buildApp(): Promise<FastifyInstance> {
-  const fastify = Fastify({ logger: false });
+type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
+
+export async function buildApp(): Promise<App> {
+  const fastify = Fastify<Server, IncomingMessage, ServerResponse, PinoLogger>({
+    loggerInstance: Logger,
+  });
 
   fastify.setErrorHandler(errorHandler);
 
@@ -30,6 +36,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await fastify.register(metricsMiddleware);
+
+  fastify.get('/health', async () => ({ status: 'ok' }));
 
   fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);
@@ -71,10 +79,16 @@ if (require.main === module) {
     .then(async (fastify) => {
       try {
         await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
-        Logger.info('[REST API] Server is running on http://localhost:' + config.server.port);
-        Logger.info(
-          '[REST API] Swagger UI available at http://localhost:' + config.server.port + '/docs',
-        );
+
+        Logger.info({ port: config.server.port }, '[REST API] Server is running');
+        Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
+
+        try {
+          await fastify.subscriptionService.initMetrics();
+        } catch (err) {
+          Logger.warn({ err }, '[Metrics] Failed to initialize active subscriptions gauge');
+        }
+
         startGrpcServer(fastify.subscriptionService);
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
@@ -85,8 +99,9 @@ if (require.main === module) {
       Logger.error({ err }, '[App] Failed to build app');
       process.exit(1);
     });
+
   const shutdown = (signal: string): void => {
-    Logger.info(`Received ${signal}. Shutting down gracefully...`);
+    Logger.info({ signal }, 'Shutting down gracefully');
     process.exit(0);
   };
 
