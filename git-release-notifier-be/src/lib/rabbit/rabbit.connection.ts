@@ -1,4 +1,5 @@
-import amqp, { ChannelModel } from 'amqplib';
+import type { ChannelModel } from 'amqplib';
+import amqp from 'amqplib';
 import 'dotenv/config';
 import { Logger } from '../logger/logger';
 import { config } from '../config/env.config';

@@ -1,8 +1,9 @@
-import { Subscription } from '@prisma/client';
+import type { Subscription } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import {
+import type {
   ISubscriptionRepository,
   RepositoryGroup,
+  SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
 
 export enum SubscriptionStatus {
@@ -52,9 +53,7 @@ export class SubscriptionRepository implements ISubscriptionRepository {
     });
   }
 
-  async findByEmail(
-    email: string,
-  ): Promise<Pick<Subscription, 'repository' | 'status' | 'createdAt'>[]> {
+  async findByEmail(email: string): Promise<SubscriptionSummary[]> {
     return prisma.subscription.findMany({
       where: { email },
       select: { repository: true, status: true, createdAt: true },

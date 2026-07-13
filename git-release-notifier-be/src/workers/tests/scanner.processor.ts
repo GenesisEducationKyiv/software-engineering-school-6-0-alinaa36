@@ -40,6 +40,7 @@ function makeProcessor(
   const repository = makeRepository(overrides.subscribers ?? []);
   const notifier = makeNotifier();
   const processor = new ScanBatchProcessor({ provider, repository, notifier });
+
   return { processor, provider, repository, notifier };
 }
 

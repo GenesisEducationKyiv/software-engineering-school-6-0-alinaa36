@@ -1,5 +1,5 @@
 import { config } from '../../../lib/config/env.config';
-import { EmailProvider } from '../interfaces/provider.interface';
+import type { EmailProvider } from '../interfaces/provider.interface';
 import { EtherealProvider } from '../mail.provider';
 import { getReleaseEmailTemplate, getConfirmationEmailTemplate } from '../templates/mail.template';
 
@@ -11,7 +11,7 @@ export class NotifierService {
     repoFullName: string,
     tagName: string,
     unsubscribeToken: string,
-  ) {
+  ): Promise<void> {
     const baseUrl = config.app.url;
     const unsubscribeUrl = `${baseUrl}/api/unsubscribe/${unsubscribeToken}`;
 
@@ -25,7 +25,7 @@ export class NotifierService {
     });
   }
 
-  async sendConfirmationEmail(email: string, repoFullName: string, token: string) {
+  async sendConfirmationEmail(email: string, repoFullName: string, token: string): Promise<void> {
     const baseUrl = config.app.url;
     const confirmUrl = `${baseUrl}/api/confirm/${token}`;
 

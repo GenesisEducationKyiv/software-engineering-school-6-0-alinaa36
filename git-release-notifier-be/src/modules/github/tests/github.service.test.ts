@@ -3,9 +3,9 @@ import { GithubService } from '../services/github.service';
 import { GithubError } from '../../../lib/errors/app.error';
 import { GithubQueryBuilder } from '../query/github-query.builder';
 import { GithubResponseParser } from '../query/github-response.parser';
-import { IGithubHttpClient } from '../client/github.client';
-import { ICacheRepository } from '../../common/cache/cache-repository.interface';
-import { GithubGraphQLResponse, GithubRepositoryNode } from '../types/github-info.type';
+import type { IGithubHttpClient } from '../client/github.client';
+import type { ICacheRepository } from '../../common/cache/cache-repository.interface';
+import type { GithubGraphQLResponse, GithubRepositoryNode } from '../types/github-info.type';
 
 vi.mock('../../../lib/logger/logger', () => ({
   Logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
@@ -21,6 +21,7 @@ function makeGraphQLResponse(
       latestRelease: repo.tagName ? { tagName: repo.tagName } : null,
     };
   });
+
   return { data };
 }
 

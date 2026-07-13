@@ -1,23 +1,22 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { ValidationError } from '../../../lib/errors/app.error';
-import { SubscribeDto } from '../dtos/subscription.dto';
-import { SubscriptionService } from '../services/subscription.service';
+import type { SubscribeDto } from '../dtos/subscription.dto';
+import type { SubscriptionService } from '../services/subscription.service';
 
 export class SubscriptionController {
   constructor(private subscriptionService: SubscriptionService) {}
 
-  async subscribe(request: FastifyRequest, reply: FastifyReply) {
+  async subscribe(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const { email, repo } = request.body as SubscribeDto;
     const subscription = await this.subscriptionService.subscribeToRepo(email, repo);
 
     return reply.status(201).send({
       status: 'success',
-      message: 'Будь ласка, перевірте вашу пошту для підтвердження підписки.',
-      _test_token: subscription.confirmToken,
+      message: `Будь ласка, перевірте вашу пошту для підтвердження підписки на ${subscription.repository}`,
     });
   }
 
-  async confirm(request: FastifyRequest, reply: FastifyReply) {
+  async confirm(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const { token } = request.params as { token: string };
     const subscription = await this.subscriptionService.confirmSubscription(token);
 
@@ -27,7 +26,7 @@ export class SubscriptionController {
     });
   }
 
-  async unsubscribe(request: FastifyRequest, reply: FastifyReply) {
+  async unsubscribe(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const { token } = request.params as { token: string };
     const subscription = await this.subscriptionService.unsubscribeFromRepo(token);
 
@@ -37,7 +36,7 @@ export class SubscriptionController {
     });
   }
 
-  async getSubscriptions(request: FastifyRequest, reply: FastifyReply) {
+  async getSubscriptions(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const { email } = request.query as { email: string };
 
     if (!email) {

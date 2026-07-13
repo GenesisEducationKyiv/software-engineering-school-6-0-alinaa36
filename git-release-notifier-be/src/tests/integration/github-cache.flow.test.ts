@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import nock from 'nock';
 import supertest from 'supertest';
 import { vi, describe, beforeAll, afterAll, it, expect } from 'vitest';

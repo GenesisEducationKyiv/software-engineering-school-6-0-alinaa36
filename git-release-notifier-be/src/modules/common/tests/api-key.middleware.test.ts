@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../lib/config/env.config', () => ({
@@ -12,7 +11,7 @@ vi.mock('../../../lib/logger/logger', () => ({
 import { UnauthorizedError } from '../../../lib/errors/app.error';
 import { Logger } from '../../../lib/logger/logger';
 import { verifyApiKey } from '../middlewares/api-key.middleware';
-import { FastifyRequest } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 
 // ---- helpers ----
 

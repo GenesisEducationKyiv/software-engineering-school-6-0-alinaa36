@@ -1,4 +1,4 @@
-import { ConsumeMessage } from 'amqplib';
+import type { ConsumeMessage } from 'amqplib';
 import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
@@ -14,7 +14,7 @@ import {
   PrismaSubscriptionAdapter,
 } from './adapters/scanner.adapters';
 import { ScanBatchProcessor } from './scanner.processor';
-import { ScanJobPayload } from './scanner.type';
+import type { ScanJobPayload } from './types/scanner.type';
 
 const MAX_RETRIES = 3;
 
@@ -32,6 +32,7 @@ async function processMessage(
   } catch {
     Logger.error('[Worker] Invalid message format. Discarding.');
     channel.ack(msg);
+
     return;
   }
 

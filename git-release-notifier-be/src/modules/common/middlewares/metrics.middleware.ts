@@ -1,7 +1,7 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { httpRequestDurationMicroseconds } from '../../../lib/metrics/metrics';
 
-export function metricsMiddleware(fastify: FastifyInstance) {
+export function metricsMiddleware(fastify: FastifyInstance): void {
   fastify.addHook('onResponse', async (request, reply) => {
     if (request.routeOptions.config.url) {
       httpRequestDurationMicroseconds

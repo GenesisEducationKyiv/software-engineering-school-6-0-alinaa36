@@ -1,8 +1,8 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { ZodTypeAny } from 'zod';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { ZodTypeAny } from 'zod';
 
 export const validateBodyZod = (schema: ZodTypeAny) => {
-  return async (request: FastifyRequest, reply: FastifyReply) => {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const result = schema.safeParse(request.body);
 
     if (!result.success) {

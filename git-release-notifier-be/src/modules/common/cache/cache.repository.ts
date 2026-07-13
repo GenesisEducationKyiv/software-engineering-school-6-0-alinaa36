@@ -1,6 +1,6 @@
 import { redis } from '../../../lib/redis/redis';
 import { Logger } from '../../../lib/logger/logger';
-import { ICacheRepository } from './cache-repository.interface';
+import type { ICacheRepository } from './cache-repository.interface';
 
 export class RedisCacheRepository implements ICacheRepository {
   async get<T>(key: string): Promise<T | null> {
@@ -11,6 +11,7 @@ export class RedisCacheRepository implements ICacheRepository {
       return JSON.parse(raw) as T;
     } catch {
       Logger.warn(`[Redis] Failed to parse cached value for key "${key}". Treating as cache miss.`);
+
       return null;
     }
   }

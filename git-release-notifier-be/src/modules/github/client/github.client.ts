@@ -1,4 +1,4 @@
-import { GithubGraphQLResponse } from '../types/github-info.type';
+import type { GithubGraphQLResponse } from '../types/github-info.type';
 import { GITHUB_GRAPHQL_URL } from '../../common/constants/api.constants';
 import { GithubError } from '../../../lib/errors/app.error';
 import { config } from '../../../lib/config/env.config';

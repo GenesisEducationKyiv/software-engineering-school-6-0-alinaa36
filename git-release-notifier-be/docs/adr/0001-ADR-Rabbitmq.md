@@ -56,7 +56,6 @@ Pros:
 - Supports competing consumers pattern for horizontal scaling
 
 Cons:
-
 - Additional infrastructure dependency
 - No built-in deduplication
 
@@ -136,5 +135,9 @@ allowing horizontal scaling of processing without any changes to the producer lo
 ### Trade-offs / Neutral Changes
 
 - Three infrastructure dependencies instead of two
+- Local development requires `docker-compose up rabbitmq`
+- Switching to a different broker in the future only requires rewriting `rabbit.channel.ts`
+  and `rabbit.connection.ts`; the worker logic remains unchanged
 - Local development requires running an additional service
 - Switching to a different broker requires rewriting the transport layer as well as adapting producer and consumer behavior
+

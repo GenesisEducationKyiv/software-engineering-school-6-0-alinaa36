@@ -2,7 +2,7 @@ import { Logger } from '../../lib/logger/logger';
 import { createChannel, QUEUE_NAME } from '../../lib/rabbit/rabbit.channel';
 import { redis } from '../../lib/redis/redis';
 import { WorkerConfig } from '../../workers/config/worker.config';
-import { ScanJobPayload } from '../../workers/scanner/scanner.type';
+import type { ScanJobPayload } from '../../workers/scanner/types/scanner.type';
 
 function buildLockKey(batch: string[]): string {
   return `lock:scan:${Buffer.from(batch.join(',')).toString('base64')}`;

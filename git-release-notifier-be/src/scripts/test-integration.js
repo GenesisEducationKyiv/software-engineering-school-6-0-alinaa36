@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 function runCommand(command) {
   try {
     execSync(command, { stdio: 'inherit' });
+
     return true;
   } catch (e) {
     return false;
