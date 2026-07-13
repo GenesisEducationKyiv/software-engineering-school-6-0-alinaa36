@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -12,9 +10,18 @@ services:
     labels:
       logging: 'app'
     depends_on:
-      - db
-      - redis
-      - rabbitmq
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     restart: on-failure
 
   db:
@@ -27,6 +34,11 @@ services:
       - POSTGRES_DB=github_notifier
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d github_notifier']
+      interval: 10s
+      timeout: 5s
+      retries: 5
   db-test:
     image: postgres:15-alpine
     ports:
@@ -40,6 +52,11 @@ services:
     image: redis:7-alpine
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   rabbitmq:
@@ -47,6 +64,11 @@ services:
     ports:
       - '5673:5672'
       - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 5
     restart: always
 
   elasticsearch:
@@ -59,6 +81,11 @@ services:
       - '9200:9200'
     volumes:
       - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -s -f http://localhost:9200/_cat/health || exit 1']
+      interval: 10s
+      timeout: 10s
+      retries: 12
     restart: always
 
   kibana:
@@ -68,42 +95,45 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     restart: always
 
   filebeat:
-   image: elastic/filebeat:8.13.0
-   user: root
-   command: filebeat -e --strict.perms=false
-   volumes:
-     - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-     - /var/lib/docker/containers:/var/lib/docker/containers:ro
-     - /var/run/docker.sock:/var/run/docker.sock:ro
-   depends_on:
-     - elasticsearch
-   restart: always
+    image: elastic/filebeat:8.13.0
+    user: root
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     ports:
       - '9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     restart: always
 
   grafana:
-   image: grafana/grafana:latest
-   ports:
-     - '3002:3000'
-   volumes:
-     - grafana_data:/var/lib/grafana
-     - ./grafana/provisioning:/etc/grafana/provisioning
-   depends_on:
-     - prometheus
-   restart: always
+    image: grafana/grafana:11.0.0
+    ports:
+      - '3002:3000'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: always
 
 volumes:
   postgres_data:
