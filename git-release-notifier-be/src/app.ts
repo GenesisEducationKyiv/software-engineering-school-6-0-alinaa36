@@ -13,8 +13,10 @@ import { errorHandler } from './lib/errors/error.handler';
 import { diPlugin } from './modules/common/plugins/di.plugin';
 import NotifierModule from './modules/notifier/notifier.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
+import { htmlRoutes } from './lib/html/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
+import { config } from './lib/config/env.config';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const fastify = Fastify({ logger: false });
@@ -52,6 +54,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await fastify.register(diPlugin);
+  await fastify.register(htmlRoutes);
   await fastify.register(subscriptionRoutes, { prefix: '/api' });
   await fastify.register(NotifierModule);
 
@@ -64,9 +67,11 @@ if (require.main === module) {
   buildApp()
     .then(async (fastify) => {
       try {
-        await fastify.listen({ port: 3000, host: '0.0.0.0' });
-        Logger.info('[REST API] Server is running on http://localhost:3000');
-        Logger.info('[REST API] Swagger UI available at http://localhost:3000/docs');
+        await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
+        Logger.info('[REST API] Server is running on http://localhost:' + config.server.port);
+        Logger.info(
+          '[REST API] Swagger UI available at http://localhost:' + config.server.port + '/docs',
+        );
         startGrpcServer(fastify.subscriptionService);
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');

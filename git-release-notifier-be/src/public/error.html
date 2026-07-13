@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Помилка — Git Release Notifier</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0d1117;
+        color: #e6edf3;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 40px;
+        width: 100%;
+        max-width: 440px;
+        text-align: center;
+      }
+
+      .icon {
+        font-size: 48px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        font-size: 22px;
+        font-weight: 600;
+        color: #f85149;
+        margin-bottom: 12px;
+      }
+
+      p {
+        font-size: 14px;
+        color: #8b949e;
+        line-height: 1.6;
+        margin-bottom: 32px;
+      }
+
+      a {
+        display: inline-block;
+        padding: 10px 24px;
+        background: #21262d;
+        color: #e6edf3;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s;
+      }
+
+      a:hover {
+        background: #30363d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">&#10007;</div>
+      <h1>Щось пішло не так</h1>
+      <p data-testid="error-message">{{MESSAGE}}</p>
+      <a href="/">На головну</a>
+    </div>
+  </body>
+</html>

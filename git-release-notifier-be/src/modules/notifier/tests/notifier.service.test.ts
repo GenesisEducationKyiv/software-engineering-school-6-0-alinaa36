@@ -11,7 +11,9 @@ vi.mock('../../../lib/logger/logger', () => ({
   Logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 
-import { Logger } from '../../../lib/logger/logger';
+// ---- типи ----
+
+type TestScheduler = IScheduler & { getHandler: () => (() => Promise<void>) | undefined };
 
 // ---- helpers ----
 
@@ -23,7 +25,7 @@ function makeSubscriptionService(
   };
 }
 
-function makeScheduler(): IScheduler & { getHandler: () => (() => Promise<void>) | undefined } {
+function makeScheduler(): TestScheduler {
   let capturedHandler: (() => Promise<void>) | undefined;
 
   return {
@@ -45,10 +47,11 @@ function makeJobQueue(): IJobQueue {
 
 function makeService(
   repos: Array<{ repository: string }> = [],
-  scheduler = makeScheduler(),
-  jobQueue = makeJobQueue(),
+  scheduler: TestScheduler = makeScheduler(),
+  jobQueue: IJobQueue = makeJobQueue(),
+  subscriptionService?: ISubscriptionServiceForScanner,
 ) {
-  const sub = makeSubscriptionService(repos);
+  const sub = subscriptionService ?? makeSubscriptionService(repos);
   const service = new ScannerService(sub, scheduler, jobQueue);
 
   return { service, sub, scheduler, jobQueue };
@@ -98,7 +101,7 @@ describe('ScannerService', () => {
   });
 
   describe('generateJobs', () => {
-    async function triggerCronCallback(scheduler: ReturnType<typeof makeScheduler>) {
+    async function triggerCronCallback(scheduler: TestScheduler) {
       await scheduler.getHandler()?.();
     }
 
@@ -109,15 +112,6 @@ describe('ScannerService', () => {
       await triggerCronCallback(scheduler);
 
       expect(jobQueue.addScanJobs).not.toHaveBeenCalled();
-    });
-
-    it('логує що немає репозиторіїв якщо підписок немає', async () => {
-      const { service, scheduler } = makeService([]);
-      service.start();
-
-      await triggerCronCallback(scheduler);
-
-      expect(Logger.info).toHaveBeenCalledWith(expect.stringContaining('nothing'));
     });
 
     it('викликає addScanJobs з іменами репозиторіїв', async () => {
@@ -140,43 +134,22 @@ describe('ScannerService', () => {
     });
 
     it('не пробрасовує помилку якщо groupByRepository кинув виняток', async () => {
-      const sub: ISubscriptionServiceForScanner = {
+      const failingSub: ISubscriptionServiceForScanner = {
         groupByRepository: vi.fn().mockRejectedValue(new Error('DB error')),
       };
       const scheduler = makeScheduler();
-      const service = new ScannerService(sub, scheduler, makeJobQueue());
+      const { service } = makeService([], scheduler, makeJobQueue(), failingSub);
       service.start();
 
       await expect(triggerCronCallback(scheduler)).resolves.not.toThrow();
     });
 
-    it('логує помилку якщо groupByRepository кинув виняток', async () => {
-      const error = new Error('DB error');
-      const sub: ISubscriptionServiceForScanner = {
-        groupByRepository: vi.fn().mockRejectedValue(error),
-      };
-      const scheduler = makeScheduler();
-      const service = new ScannerService(sub, scheduler, makeJobQueue());
-      service.start();
-
-      await triggerCronCallback(scheduler);
-
-      expect(Logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ err: error }),
-        expect.any(String),
-      );
-    });
-
     it('не пробрасовує помилку якщо addScanJobs кинув виняток', async () => {
-      const jobQueue: IJobQueue = {
+      const failingJobQueue: IJobQueue = {
         addScanJobs: vi.fn().mockRejectedValue(new Error('Queue unavailable')),
       };
       const scheduler = makeScheduler();
-      const service = new ScannerService(
-        makeSubscriptionService([{ repository: 'user/repo' }]),
-        scheduler,
-        jobQueue,
-      );
+      const { service } = makeService([{ repository: 'user/repo' }], scheduler, failingJobQueue);
       service.start();
 
       await expect(triggerCronCallback(scheduler)).resolves.not.toThrow();

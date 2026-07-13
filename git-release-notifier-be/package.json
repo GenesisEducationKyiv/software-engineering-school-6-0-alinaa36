@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start:dev": "tsx watch src/app.ts",
-    "build": "tsc",
+    "build": "tsc && copyfiles -u 1 src/grpc/proto/*.proto src/docs/*.yaml dist/ && copyfiles -u 1 src/public/*.html dist/",
     "start": "node dist/app.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
@@ -14,6 +14,9 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "node src/scripts/test-integration.js",
     "test:integration:ci": "npx --yes dotenv-cli -e .env.test --override -- vitest run --config vitest.integration.config.ts",
+    "test:e2e": "node src/scripts/test-e2e.js",
+    "test:e2e:ci": "npx dotenv-cli -e .env.test -- playwright test --config playwright.config.ts",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "docker:test:up": "docker-compose up -d db-test",
     "docker:test:down": "docker-compose stop db-test",
     "postinstall": "prisma generate",
@@ -46,6 +49,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.60.0",
     "@testcontainers/postgresql": "^11.14.0",
     "@types/amqplib": "^0.10.8",
     "@types/js-yaml": "^4.0.9",
@@ -56,6 +60,8 @@
     "@types/supertest": "^7.2.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
+    "copyfiles": "^2.4.1",
+    "cross-env": "^10.1.0",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
@@ -68,6 +74,7 @@
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.59.3",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "wait-on": "^9.0.10"
   }
 }

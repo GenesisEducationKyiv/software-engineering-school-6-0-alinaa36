@@ -2,5 +2,6 @@
 /.env
 /.env.prod
 /src/generated/prisma
-
+/dist
 /src/generated/prisma
+/test-results
