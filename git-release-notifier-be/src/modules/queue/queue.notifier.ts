@@ -22,7 +22,7 @@ async function publishBatch(
   const { acquired, lockKey } = await lockStore.acquireForBatch(batch);
 
   if (!acquired) {
-    Logger.debug('[Redis] Batch is already in the queue. Skipping.');
+    Logger.info('[Redis] Batch is already in the queue. Skipping.');
 
     return;
   }
@@ -37,7 +37,7 @@ async function publishBatch(
     return;
   }
 
-  Logger.info({ batchSize: batch.length }, '[Queue] Batch added to the queue');
+  Logger.info(`[Queue] Batch of ${batch.length} repositories added to the queue.`);
 }
 
 export async function addScanJobs(

@@ -29,10 +29,7 @@ export class SmtpProvider implements EmailProvider {
         html: options.html,
       });
 
-      Logger.debug(
-        { messageId: info.messageId, preview: nodemailer.getTestMessageUrl(info) },
-        '[SMTP] Email sent',
-      );
+      Logger.info(`[SMTP] Email sent! Preview: ${nodemailer.getTestMessageUrl(info)}`);
     } catch (error) {
       Logger.error({ err: error }, '[SMTP] Error sending email');
       throw error;

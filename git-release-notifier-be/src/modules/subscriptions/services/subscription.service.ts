@@ -7,7 +7,6 @@ import type {
 } from '../interfaces/subscription-repository.interface';
 import type { INotifierService } from '../../sender/interfaces/notifier.interface';
 import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
-import { Logger } from '../../../lib/logger/logger';
 
 export class SubscriptionService {
   constructor(
@@ -35,7 +34,6 @@ export class SubscriptionService {
 
     const subscription = await this.subscriptionRepository.upsertPending(email, repository);
     await this.notifier.sendConfirmationEmail(email, repository, subscription.confirmToken);
-    Logger.info({ email, repo: repository }, '[Subscription] Pending subscription created');
 
     return subscription;
   }
@@ -54,8 +52,6 @@ export class SubscriptionService {
     const updatedSubscription = await this.subscriptionRepository.activate(subscription.id);
     await this.syncActiveGauge();
 
-    Logger.info('[Subscription] Subscription confirmed');
-
     return updatedSubscription;
   }
 
@@ -68,13 +64,8 @@ export class SubscriptionService {
 
     const deleted = await this.subscriptionRepository.delete(subscription.id);
     await this.syncActiveGauge();
-    Logger.info('[Subscription] Unsubscribed successfully');
 
     return deleted;
-  }
-
-  async initMetrics(): Promise<void> {
-    await this.syncActiveGauge();
   }
 
   async getSubscriptionsByEmail(email: string): Promise<SubscriptionSummary[]> {

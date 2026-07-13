@@ -19,9 +19,6 @@ import { GitHubRepoProviderAdapter } from '../../subscriptions/adapters/git-hub-
 import { SubscriptionRepository } from '../../subscriptions/repositories/subscription.repository';
 import { SubscriptionService } from '../../subscriptions/services/subscription.service';
 import { RedisCacheRepository } from '../cache/cache.repository';
-import { MeteredScanBatchProcessor } from '../../../workers/scanner/infrastructure/decorators/scanner.processor.metered';
-import type { IBatchProcessor } from '../../../workers/scanner/interfaces/scanner.interfaces';
-import { MeteredNotifierService } from '../../sender/decorators/notifier.service.metered';
 
 function createCachedGithubClient(): CachedGithubClient {
   return new CachedGithubClient(
@@ -30,12 +27,12 @@ function createCachedGithubClient(): CachedGithubClient {
   );
 }
 
-function createNotifier(): MeteredNotifierService {
-  return new MeteredNotifierService(new NotifierService(new SmtpProvider()));
+function createNotifier(): NotifierService {
+  return new NotifierService(new SmtpProvider());
 }
 
 export function createWorkerContainer(): {
-  processor: IBatchProcessor;
+  processor: ScanBatchProcessor;
   lockStore: ILockStore;
 } {
   const githubClient = createCachedGithubClient();
@@ -43,13 +40,11 @@ export function createWorkerContainer(): {
   const lockStore = new RedisLockStore(redis);
   const subscriptionRepository = new SubscriptionRepository();
 
-  const processor = new MeteredScanBatchProcessor(
-    new ScanBatchProcessor({
-      provider: new GithubReleaseAdapter(githubClient),
-      notifier,
-      repository: subscriptionRepository,
-    }),
-  );
+  const processor = new ScanBatchProcessor({
+    provider: new GithubReleaseAdapter(githubClient),
+    notifier,
+    repository: subscriptionRepository,
+  });
 
   return { processor, lockStore };
 }

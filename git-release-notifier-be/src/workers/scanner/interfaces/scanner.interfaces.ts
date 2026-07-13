@@ -20,7 +20,3 @@ export interface ProcessorDeps {
   notifier: INotifier;
   repository: IScannerSubscriptionRepository;
 }
-
-export interface IBatchProcessor {
-  process(repos: string[]): Promise<void>;
-}

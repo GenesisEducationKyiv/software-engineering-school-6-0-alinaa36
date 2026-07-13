@@ -26,14 +26,13 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 COPY package*.json ./
+RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 
 COPY --from=builder /app/prisma ./prisma
 
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-
-RUN npm ci --omit=dev
 
 RUN npx prisma generate --schema=prisma/schema.prisma
 
