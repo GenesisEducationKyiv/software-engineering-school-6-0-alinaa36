@@ -8,10 +8,12 @@ const envSchema = z.object({
   REDIS_URL: z.string().url('Invalid REDIS_URL'),
   APP_URL: z.string().url().default('http://localhost:3000'),
   METRICS_PORT: z.coerce.number().default(9101),
+  GRPC_PORT: z.coerce.number().default(50052),
 
   RECONNECT_DELAY_MS: z.coerce.number().default(5_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().default(10_000),
   IDEMPOTENCY_TTL_SECONDS: z.coerce.number().default(86_400),
+  IDEMPOTENCY_LEASE_SECONDS: z.coerce.number().default(60),
 
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number(),
@@ -44,12 +46,16 @@ export const config = {
   metrics: {
     port: parsedEnv.METRICS_PORT,
   },
+  grpc: {
+    port: parsedEnv.GRPC_PORT,
+  },
   consumer: {
     reconnectDelayMs: parsedEnv.RECONNECT_DELAY_MS,
     shutdownTimeoutMs: parsedEnv.SHUTDOWN_TIMEOUT_MS,
   },
   idempotency: {
     ttlSeconds: parsedEnv.IDEMPOTENCY_TTL_SECONDS,
+    leaseSeconds: parsedEnv.IDEMPOTENCY_LEASE_SECONDS,
   },
   mail: {
     host: parsedEnv.SMTP_HOST,

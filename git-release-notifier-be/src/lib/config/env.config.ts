@@ -11,6 +11,9 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
 
   API_KEY: z.string().min(8, 'API_KEY should be at least 8 characters long'),
+
+  RELEASE_TRANSPORT: z.enum(['queue', 'grpc']).default('queue'),
+  NOTIFICATION_GRPC_URL: z.string().min(1).default('localhost:50052'),
 });
 
 const _env = envSchema.safeParse(process.env);
@@ -43,5 +46,9 @@ export const config = {
   },
   api: {
     key: parsedEnv.API_KEY,
+  },
+  release: {
+    transport: parsedEnv.RELEASE_TRANSPORT,
+    grpcUrl: parsedEnv.NOTIFICATION_GRPC_URL,
   },
 } as const;
