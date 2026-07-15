@@ -64,6 +64,14 @@ export class SubscriptionRepository
     return this.toEntity(raw);
   }
 
+  async deleteIfPending(id: string): Promise<boolean> {
+    const { count } = await this.prisma.subscription.deleteMany({
+      where: { id, status: SubscriptionStatus.PENDING },
+    });
+
+    return count > 0;
+  }
+
   async findByEmail(email: string): Promise<SubscriptionSummary[]> {
     const rows = await this.prisma.subscription.findMany({
       where: { email },

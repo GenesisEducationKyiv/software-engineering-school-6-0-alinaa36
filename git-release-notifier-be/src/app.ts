@@ -20,6 +20,7 @@ import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
 import { config } from './lib/config/env.config';
 import { diPlugin } from './composition/di.plugin';
+import { startConfirmationReplyConsumer } from './modules/saga/adapters/rabbit-confirmation-reply.consumer';
 
 export type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
 
@@ -80,6 +81,10 @@ if (require.main === module) {
         Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
 
         startGrpcServer(fastify.subscriptionService);
+
+        void startConfirmationReplyConsumer(fastify.subscribeSaga).catch((err) => {
+          Logger.error({ err }, '[Saga] Failed to start confirmation reply consumer');
+        });
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
         process.exit(1);

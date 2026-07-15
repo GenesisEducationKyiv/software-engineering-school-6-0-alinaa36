@@ -73,18 +73,24 @@ export async function startDeliveredConsumer(
     (msg) => {
       if (!msg) return;
 
-      void handleMessage(
-        msg,
-        () => channel.ack(msg),
-        () => channel.nack(msg, false, false),
-        repository,
-      ).catch((err) => {
-        Logger.error({ err }, '[Delivered] Unhandled error in consumer');
+      const ack = () => {
+        try {
+          channel.ack(msg);
+        } catch (err) {
+          Logger.error({ err }, '[Delivered] Failed to ack event');
+        }
+      };
+      const nack = () => {
         try {
           channel.nack(msg, false, false);
-        } catch (nackErr) {
-          Logger.error({ err: nackErr }, '[Delivered] Failed to nack during fallback');
+        } catch (err) {
+          Logger.error({ err }, '[Delivered] Failed to nack event');
         }
+      };
+
+      void handleMessage(msg, ack, nack, repository).catch((err) => {
+        Logger.error({ err }, '[Delivered] Unhandled error in consumer');
+        nack();
       });
     },
     { noAck: false },

@@ -99,7 +99,7 @@ module.exports = {
     },
   ],
   options: {
-    doNotFollow: { path: ['node_modules'] },
+    doNotFollow: { path: ['node_modules', '^[.][.]/packages/'] },
     tsConfig: { fileName: 'tsconfig.json' },
     tsPreCompilationDeps: true,
     reporterOptions: {
