@@ -1,5 +1,11 @@
 import { Logger } from '../../lib/logger/logger';
+import { WorkerConfig } from '../config/worker.config';
 import type { ProcessorDeps } from './interfaces/scanner.interfaces';
+
+interface RepoRelease {
+  repoName: string;
+  newTag: string;
+}
 
 export class ScanBatchProcessor {
   constructor(private readonly deps: ProcessorDeps) {}
@@ -13,12 +19,26 @@ export class ScanBatchProcessor {
 
     const latestReleases = await this.deps.provider.getLatestReleasesBatch(repos);
 
-    for (const repoName of repos) {
-      const newTag = latestReleases[repoName];
-      if (!newTag) continue;
+    const pending = repos
+      .map((repoName) => ({ repoName, newTag: latestReleases[repoName] }))
+      .filter((item): item is RepoRelease => Boolean(item.newTag));
 
-      await this.processRepo(repoName, newTag);
-    }
+    await this.processConcurrently(pending);
+  }
+
+  private async processConcurrently(items: RepoRelease[]): Promise<void> {
+    let cursor = 0;
+
+    const worker = async (): Promise<void> => {
+      while (cursor < items.length) {
+        const { repoName, newTag } = items[cursor];
+        cursor += 1;
+        await this.processRepo(repoName, newTag);
+      }
+    };
+
+    const size = Math.min(WorkerConfig.REPO_CONCURRENCY, items.length);
+    await Promise.all(Array.from({ length: size }, () => worker()));
   }
 
   private async processRepo(repoName: string, newTag: string): Promise<void> {
@@ -32,20 +52,19 @@ export class ScanBatchProcessor {
     );
 
     const results = await Promise.allSettled(
-      subscribersToNotify.map(async (sub) => {
-        await this.deps.notifier.sendReleaseNotification({
+      subscribersToNotify.map((sub) =>
+        this.deps.notifier.sendReleaseNotification({
           email: sub.email,
           repo: repoName,
           tag: newTag,
           unsubscribeToken: sub.unsubscribeToken,
-        });
-        await this.deps.repository.updateTags([sub.id], newTag);
-      }),
+        }),
+      ),
     );
 
     const failed = results.filter((r) => r.status === 'rejected').length;
     if (failed > 0) {
-      Logger.warn(`${failed}/${results.length} notifications failed for ${repoName}`);
+      Logger.warn(`${failed}/${results.length} enqueue failed for ${repoName}`);
     }
   }
 }

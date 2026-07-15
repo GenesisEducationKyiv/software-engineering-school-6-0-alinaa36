@@ -15,11 +15,13 @@ import { errorHandler } from './lib/errors/error.handler';
 import { metricsMiddleware } from './modules/common/middlewares/metrics.middleware';
 import SchedulerModule from './modules/scheduler/scheduler.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
-import { htmlRoutes } from './lib/html/html.routes';
+import { htmlRoutes } from './modules/subscriptions/routes/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
+import { closeRabbitConnection } from './lib/rabbit/rabbit.connection';
 import { config } from './lib/config/env.config';
 import { diPlugin } from './composition/di.plugin';
+import { startConfirmationReplyConsumer } from './modules/saga/adapters/rabbit-confirmation-reply.consumer';
 
 export type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
 
@@ -73,8 +75,6 @@ export async function buildApp(): Promise<App> {
 }
 
 if (require.main === module) {
-  void import('./workers/scanner/scanner.worker');
-
   buildApp()
     .then(async (fastify) => {
       try {
@@ -83,13 +83,11 @@ if (require.main === module) {
         Logger.info({ port: config.server.port }, '[REST API] Server is running');
         Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
 
-        try {
-          await fastify.subscriptionService.initMetrics();
-        } catch (err) {
-          Logger.warn({ err }, '[Metrics] Failed to initialize active subscriptions gauge');
-        }
-
         startGrpcServer(fastify.subscriptionService);
+
+        void startConfirmationReplyConsumer(fastify.subscribeSaga).catch((err) => {
+          Logger.error({ err }, '[Saga] Failed to start confirmation reply consumer');
+        });
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
         process.exit(1);
@@ -102,7 +100,7 @@ if (require.main === module) {
 
   const shutdown = (signal: string): void => {
     Logger.info({ signal }, 'Shutting down gracefully');
-    process.exit(0);
+    void closeRabbitConnection().finally(() => process.exit(0));
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));

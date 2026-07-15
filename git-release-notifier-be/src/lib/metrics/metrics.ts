@@ -22,11 +22,16 @@ export const httpRequestDurationSeconds = new client.Histogram({
   registers: [register],
 });
 
-export const activeSubscriptionsGauge = new client.Gauge({
-  name: 'active_subscriptions_total',
-  help: 'Total number of active subscriptions in the database',
-  registers: [register],
-});
+export function registerActiveSubscriptionsGauge(provider: () => Promise<number>): client.Gauge {
+  return new client.Gauge({
+    name: 'active_subscriptions_total',
+    help: 'Total number of active subscriptions in the database',
+    registers: [register],
+    async collect() {
+      this.set(await provider());
+    },
+  });
+}
 
 export const workerJobDurationSeconds = new client.Histogram({
   name: 'worker_job_duration_seconds',

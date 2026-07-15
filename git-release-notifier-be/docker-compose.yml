@@ -1,8 +1,8 @@
 services:
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: git-release-notifier-be/Dockerfile
     ports:
       - '3000:3000'
     env_file:
@@ -23,6 +23,37 @@ services:
       retries: 5
       start_period: 40s
     restart: on-failure
+
+  worker:
+    build:
+      context: ..
+      dockerfile: git-release-notifier-be/Dockerfile
+    command: npm run start:worker
+    env_file:
+      - .env.prod
+    labels:
+      logging: 'app'
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: notification-service/Dockerfile
+    env_file:
+      - ../notification-service/.env.prod
+    ports:
+      - '9101:9101'
+    labels:
+      logging: 'app'
+    depends_on:
+      - rabbitmq
+      - redis
+    restart: on-failure
+    stop_grace_period: 15s
 
   db:
     image: postgres:15-alpine

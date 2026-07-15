@@ -22,16 +22,24 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: git-release-notifier-be/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
+        working-directory: ${{ github.workspace }}
         run: npm ci
+
+      - name: Build contracts
+        working-directory: ${{ github.workspace }}
+        run: npm run build:contracts
 
       - name: Lint
         run: npm run lint
 
       - name: Typecheck
         run: npm run type:check
+
+      - name: Architecture dependency check
+        run: npm run deps:check
 
   unit:
     name: Unit Tests
@@ -49,13 +57,42 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: git-release-notifier-be/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        working-directory: ${{ github.workspace }}
+        run: rm -f package-lock.json && npm install
+
+      - name: Build contracts
+        working-directory: ${{ github.workspace }}
+        run: npm run build:contracts
 
       - name: Unit tests
         run: npm run test:unit
+
+  unit-notification-service:
+    name: Unit Tests (notification-service)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: rm -f package-lock.json && npm install
+
+      - name: Build contracts
+        run: npm run build:contracts
+
+      - name: Unit tests
+        run: npm run test:unit -w notification-service
 
   integration:
     name: Integration Tests
@@ -109,10 +146,15 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: git-release-notifier-be/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        working-directory: ${{ github.workspace }}
+        run: rm -f package-lock.json && npm install
+
+      - name: Build contracts
+        working-directory: ${{ github.workspace }}
+        run: npm run build:contracts
 
       - name: Load test env
         run: cat .env.test >> $GITHUB_ENV
@@ -179,10 +221,15 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: git-release-notifier-be/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        working-directory: ${{ github.workspace }}
+        run: rm -f package-lock.json && npm install
+
+      - name: Build contracts
+        working-directory: ${{ github.workspace }}
+        run: npm run build:contracts
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

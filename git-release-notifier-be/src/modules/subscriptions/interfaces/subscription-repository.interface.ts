@@ -6,7 +6,10 @@ export interface OutdatedSubscriber {
 
 export interface IScannerSubscriptionRepository {
   getOutdatedSubscribers(repo: string, newTag: string): Promise<OutdatedSubscriber[]>;
-  updateTags(subscriberIds: string[], newTag: string): Promise<void>;
+}
+
+export interface ISubscriptionTagRepository {
+  advanceTag(email: string, repository: string, tag: string): Promise<void>;
 }
 
 export interface SubscriptionEntity {
@@ -38,6 +41,7 @@ export interface ISubscriptionRepository {
   activate(id: string): Promise<SubscriptionEntity>;
   findByUnsubscribeToken(token: string): Promise<SubscriptionEntity | null>;
   delete(id: string): Promise<SubscriptionEntity>;
+  deleteIfPending(id: string): Promise<boolean>;
   findByEmail(email: string): Promise<SubscriptionSummary[]>;
   countActive(): Promise<number>;
   groupByRepository(): Promise<RepositoryGroup[]>;

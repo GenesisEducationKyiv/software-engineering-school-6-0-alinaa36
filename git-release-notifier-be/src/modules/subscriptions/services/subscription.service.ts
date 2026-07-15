@@ -1,20 +1,19 @@
-import type { IMetricsGauge } from '../../../lib/metrics/metrics';
 import { ConflictError, ErrorCode, NotFoundError } from '../../../lib/errors/app.error';
 import type {
   ISubscriptionRepository,
   SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
-import type { INotifierService } from '../../sender/interfaces/notifier.interface';
 import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
+import type { ISubscriptionService } from '../interfaces/subscription-service.interface';
+import type { ISubscribeSaga } from '../../saga/interfaces/subscribe-saga.interface';
 import { Logger } from '../../../lib/logger/logger';
 
-export class SubscriptionService {
+export class SubscriptionService implements ISubscriptionService {
   constructor(
     private readonly subscriptionRepository: ISubscriptionRepository,
     private readonly repoProvider: IRepositoryProvider,
-    private readonly notifier: INotifierService,
-    private readonly activeGauge: IMetricsGauge,
+    private readonly subscribeSaga: ISubscribeSaga,
   ) {}
 
   async subscribeToRepo(email: string, repository: string): Promise<SubscriptionEntity> {
@@ -33,8 +32,7 @@ export class SubscriptionService {
       throw new NotFoundError(ErrorCode.REPOSITORY_NOT_FOUND);
     }
 
-    const subscription = await this.subscriptionRepository.upsertPending(email, repository);
-    await this.notifier.sendConfirmationEmail(email, repository, subscription.confirmToken);
+    const subscription = await this.subscribeSaga.start(email, repository);
     Logger.info({ email, repo: repository }, '[Subscription] Pending subscription created');
 
     return subscription;
@@ -52,8 +50,6 @@ export class SubscriptionService {
     }
 
     const updatedSubscription = await this.subscriptionRepository.activate(subscription.id);
-    await this.syncActiveGauge();
-
     Logger.info('[Subscription] Subscription confirmed');
 
     return updatedSubscription;
@@ -67,14 +63,9 @@ export class SubscriptionService {
     }
 
     const deleted = await this.subscriptionRepository.delete(subscription.id);
-    await this.syncActiveGauge();
     Logger.info('[Subscription] Unsubscribed successfully');
 
     return deleted;
-  }
-
-  async initMetrics(): Promise<void> {
-    await this.syncActiveGauge();
   }
 
   async getSubscriptionsByEmail(email: string): Promise<SubscriptionSummary[]> {
@@ -83,10 +74,5 @@ export class SubscriptionService {
 
   async groupByRepository(): Promise<{ repository: string; count: number }[]> {
     return this.subscriptionRepository.groupByRepository();
-  }
-
-  private async syncActiveGauge(): Promise<void> {
-    const count = await this.subscriptionRepository.countActive();
-    this.activeGauge.set(count);
   }
 }

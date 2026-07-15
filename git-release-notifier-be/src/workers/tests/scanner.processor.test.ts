@@ -36,7 +36,6 @@ function makeRepository(
 ): Mocked<IScannerSubscriptionRepository> {
   return {
     getOutdatedSubscribers: vi.fn().mockResolvedValue(subscribers),
-    updateTags: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -128,34 +127,6 @@ describe('ScanBatchProcessor', () => {
       });
     });
 
-    it('оновлює тег після успішного надсилання листа', async () => {
-      const { processor, repository } = makeProcessor({
-        releases: { 'user/repo': 'v2.0.0' },
-        subscribers: [{ id: '1', email: 'a@example.com', unsubscribeToken: 'tok' }],
-      });
-
-      await processor.process(['user/repo']);
-
-      expect(repository.updateTags).toHaveBeenCalledWith(['1'], 'v2.0.0');
-    });
-
-    it('оновлює теги для всіх успішно повідомлених підписників', async () => {
-      const subscribers: TestSubscriber[] = [
-        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
-        { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
-      ];
-      const { processor, repository } = makeProcessor({
-        releases: { 'user/repo': 'v2.0.0' },
-        subscribers,
-      });
-
-      await processor.process(['user/repo']);
-
-      expect(repository.updateTags).toHaveBeenCalledTimes(2);
-      expect(repository.updateTags).toHaveBeenCalledWith(['1'], 'v2.0.0');
-      expect(repository.updateTags).toHaveBeenCalledWith(['2'], 'v2.0.0');
-    });
-
     it('обробляє кілька репозиторіїв за один виклик', async () => {
       const { processor, notifier } = makeProcessor({
         releases: {
@@ -202,38 +173,6 @@ describe('ScanBatchProcessor', () => {
       await processor.process(['user/repo']);
 
       expect(notifier.sendReleaseNotification).toHaveBeenCalledTimes(2);
-    });
-
-    it('оновлює тег тільки для успішно повідомлених підписників', async () => {
-      const subscribers: TestSubscriber[] = [
-        { id: '1', email: 'a@example.com', unsubscribeToken: 'tok-a' },
-        { id: '2', email: 'b@example.com', unsubscribeToken: 'tok-b' },
-      ];
-      const { processor, notifier, repository } = makeProcessor({
-        releases: { 'user/repo': 'v2.0.0' },
-        subscribers,
-      });
-
-      notifier.sendReleaseNotification
-        .mockRejectedValueOnce(new Error('SMTP error'))
-        .mockResolvedValueOnce(undefined);
-
-      await processor.process(['user/repo']);
-
-      expect(repository.updateTags).toHaveBeenCalledWith(['2'], 'v2.0.0');
-    });
-
-    it('не оновлює тег якщо лист не відправився', async () => {
-      const { processor, notifier, repository } = makeProcessor({
-        releases: { 'user/repo': 'v2.0.0' },
-        subscribers: [{ id: '1', email: 'a@example.com', unsubscribeToken: 'tok' }],
-      });
-
-      notifier.sendReleaseNotification.mockRejectedValue(new Error('SMTP error'));
-
-      await processor.process(['user/repo']);
-
-      expect(repository.updateTags).not.toHaveBeenCalled();
     });
   });
 });
