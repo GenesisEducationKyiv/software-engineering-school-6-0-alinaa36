@@ -1,18 +1,32 @@
 import type { Redis } from 'ioredis';
-import type { IIdempotencyStore } from '../interfaces/idempotency-store.interface';
+import type { ClaimResult, IIdempotencyStore } from '../interfaces/idempotency-store.interface';
 
 const KEY_PREFIX = 'notif:idemp:';
+const PENDING = 'pending';
+const DONE = 'done';
 
 export class RedisIdempotencyStore implements IIdempotencyStore {
   constructor(
     private readonly redis: Redis,
-    private readonly ttlSeconds: number,
+    private readonly doneTtlSeconds: number,
+    private readonly leaseSeconds: number,
   ) {}
 
-  async markIfFirst(key: string): Promise<boolean> {
-    const result = await this.redis.set(this.namespaced(key), '1', 'EX', this.ttlSeconds, 'NX');
+  async claim(key: string): Promise<ClaimResult> {
+    const namespaced = this.namespaced(key);
+    const result = await this.redis.set(namespaced, PENDING, 'EX', this.leaseSeconds, 'NX');
 
-    return result === 'OK';
+    if (result === 'OK') {
+      return 'claimed';
+    }
+
+    const current = await this.redis.get(namespaced);
+
+    return current === DONE ? 'done' : 'in_progress';
+  }
+
+  async confirm(key: string): Promise<void> {
+    await this.redis.set(this.namespaced(key), DONE, 'EX', this.doneTtlSeconds);
   }
 
   async release(key: string): Promise<void> {

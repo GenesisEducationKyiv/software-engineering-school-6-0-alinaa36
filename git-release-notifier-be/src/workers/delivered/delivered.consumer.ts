@@ -4,7 +4,7 @@ import {
   releaseDeliveredSchema,
   type ReleaseDeliveredEvent,
 } from '@grn/contracts';
-import { getRabbitConnection } from '../../lib/rabbit/rabbit.connection';
+import { getRabbitConnection, RECONNECT_DELAY_MS } from '../../lib/rabbit/rabbit.connection';
 import { Logger } from '../../lib/logger/logger';
 import type { ISubscriptionTagRepository } from '../../modules/subscriptions/interfaces/subscription-repository.interface';
 
@@ -56,27 +56,54 @@ export async function startDeliveredConsumer(
   await channel.assertQueue(RELEASE_DELIVERED_QUEUE_NAME, { durable: true });
   await channel.prefetch(20);
 
+  channel.on('error', (err) => {
+    Logger.error({ err }, '[Delivered] Channel error');
+  });
+
+  channel.on('close', () => {
+    Logger.warn(
+      { reconnectDelayMs: RECONNECT_DELAY_MS },
+      '[Delivered] Channel closed, scheduling re-subscribe',
+    );
+    scheduleReconnect(repository);
+  });
+
   void channel.consume(
     RELEASE_DELIVERED_QUEUE_NAME,
     (msg) => {
       if (!msg) return;
 
-      void handleMessage(
-        msg,
-        () => channel.ack(msg),
-        () => channel.nack(msg, false, false),
-        repository,
-      ).catch((err) => {
-        Logger.error({ err }, '[Delivered] Unhandled error in consumer');
+      const ack = () => {
+        try {
+          channel.ack(msg);
+        } catch (err) {
+          Logger.error({ err }, '[Delivered] Failed to ack event');
+        }
+      };
+      const nack = () => {
         try {
           channel.nack(msg, false, false);
-        } catch (nackErr) {
-          Logger.error({ err: nackErr }, '[Delivered] Failed to nack during fallback');
+        } catch (err) {
+          Logger.error({ err }, '[Delivered] Failed to nack event');
         }
+      };
+
+      void handleMessage(msg, ack, nack, repository).catch((err) => {
+        Logger.error({ err }, '[Delivered] Unhandled error in consumer');
+        nack();
       });
     },
     { noAck: false },
   );
 
   Logger.info('[Delivered] Consumer started, listening for delivery confirmations...');
+}
+
+function scheduleReconnect(repository: ISubscriptionTagRepository): void {
+  setTimeout(() => {
+    startDeliveredConsumer(repository).catch((err) => {
+      Logger.error({ err }, '[Delivered] Re-subscribe failed, retrying');
+      scheduleReconnect(repository);
+    });
+  }, RECONNECT_DELAY_MS);
 }

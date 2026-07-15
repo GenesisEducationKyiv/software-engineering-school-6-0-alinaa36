@@ -1,6 +1,7 @@
 export interface ScanJobPayload {
   repos: string[];
   lockKey: string;
+  lockToken: string;
 }
 
 export interface IScanQueueSession {

@@ -17,6 +17,7 @@ async function connect(): Promise<ChannelModel> {
 
   conn.on('error', (err) => {
     Logger.error({ err }, '[RabbitMQ] Connection error');
+    connectionPromise = null;
   });
 
   conn.on('close', () => {
@@ -27,25 +28,34 @@ async function connect(): Promise<ChannelModel> {
       { reconnectDelayMs: RECONNECT_DELAY_MS },
       '[RabbitMQ] Connection closed, reconnecting',
     );
-    setTimeout(() => {
-      void getRabbitConnection().catch((err: unknown) => {
-        Logger.error({ err }, '[RabbitMQ] Reconnect failed');
-      });
-    }, RECONNECT_DELAY_MS);
+    scheduleReconnect();
   });
 
   return conn;
 }
 
-export function getRabbitConnection(): Promise<ChannelModel> {
-  if (!connectionPromise) {
-    connectionPromise = connect().catch((err: unknown) => {
-      connectionPromise = null;
-      throw err;
+function scheduleReconnect(): void {
+  setTimeout(() => {
+    getRabbitConnection().catch((err) => {
+      Logger.error({ err }, '[RabbitMQ] Reconnect failed, retrying');
+      scheduleReconnect();
     });
+  }, RECONNECT_DELAY_MS);
+}
+
+export async function getRabbitConnection(): Promise<ChannelModel> {
+  if (connectionPromise) {
+    return connectionPromise;
   }
 
-  return connectionPromise;
+  connectionPromise = connect();
+
+  try {
+    return await connectionPromise;
+  } catch (err) {
+    connectionPromise = null;
+    throw err;
+  }
 }
 
 export async function closeRabbitConnection(): Promise<void> {

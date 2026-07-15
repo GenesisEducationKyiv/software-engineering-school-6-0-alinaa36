@@ -15,22 +15,35 @@ import type { INotifierService } from "../modules/sender/interfaces/notifier.int
 import { NotifierService } from "../modules/sender/services/mail.service";
 import { SmtpProvider } from "../modules/sender/mail.provider";
 import { MeteredNotifierService } from "../modules/sender/decorators/notifier.service.metered";
-import type { IIdempotencyStore } from "../modules/sender/interfaces/idempotency-store.interface";
+import type {
+  ClaimResult,
+  IIdempotencyStore,
+} from "../modules/sender/interfaces/idempotency-store.interface";
 import { RedisIdempotencyStore } from "../modules/sender/adapters/redis-idempotency.store";
 import type { IDeliveredPublisher } from "../modules/sender/interfaces/delivered-publisher.interface";
 import { RabbitDeliveredPublisher } from "../modules/sender/adapters/rabbit-delivered-publisher";
+import type { IConfirmationReplyPublisher } from "../modules/sender/interfaces/confirmation-reply-publisher.interface";
+import { RabbitConfirmationReplyPublisher } from "../modules/sender/adapters/rabbit-confirmation-reply.publisher";
 import { redis } from "../lib/redis/redis";
 
-const notifier: INotifierService = new MeteredNotifierService(
-  new NotifierService(new SmtpProvider()),
-);
+export type ConsumerDeps = {
+  notifier: INotifierService;
+  idempotency: IIdempotencyStore;
+  deliveredPublisher: IDeliveredPublisher;
+};
 
-const idempotency: IIdempotencyStore = new RedisIdempotencyStore(
-  redis,
-  config.idempotency.ttlSeconds,
-);
+const deps: ConsumerDeps = {
+  notifier: new MeteredNotifierService(new NotifierService(new SmtpProvider())),
+  idempotency: new RedisIdempotencyStore(
+    redis,
+    config.idempotency.ttlSeconds,
+    config.idempotency.leaseSeconds,
+  ),
+  deliveredPublisher: new RabbitDeliveredPublisher(),
+};
 
-const deliveredPublisher: IDeliveredPublisher = new RabbitDeliveredPublisher();
+const replyPublisher: IConfirmationReplyPublisher =
+  new RabbitConfirmationReplyPublisher();
 
 let channel: Channel | null = null;
 let consumerTag: string | null = null;
@@ -50,7 +63,10 @@ function parseMessage(msg: ConsumeMessage): EmailMessage | null {
   }
 }
 
-async function deliver(message: EmailMessage): Promise<void> {
+async function deliver(
+  message: EmailMessage,
+  { notifier }: ConsumerDeps,
+): Promise<void> {
   if (message.type === "release") {
     await notifier.sendReleaseNotification({
       email: message.email,
@@ -69,17 +85,59 @@ async function deliver(message: EmailMessage): Promise<void> {
   );
 }
 
-async function confirmDelivery(message: EmailMessage): Promise<void> {
-  if (message.type !== "release") return;
+async function confirmDelivery(
+  message: EmailMessage,
+  { deliveredPublisher }: ConsumerDeps,
+): Promise<void> {
+  if (message.type === "release") {
+    await deliveredPublisher.publish({
+      email: message.email,
+      repo: message.repo,
+      tag: message.tag,
+    });
 
-  await deliveredPublisher.publish({
-    email: message.email,
-    repo: message.repo,
-    tag: message.tag,
-  });
+    return;
+  }
+
+  if (message.sagaId) {
+    await replyPublisher.publish({ sagaId: message.sagaId, status: "SENT" });
+  }
+
+  if (message.sagaId) {
+    await replyPublisher.publish({ sagaId: message.sagaId, status: "SENT" });
+  }
 }
 
-async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
+async function publishSagaFailure(
+  message: EmailMessage,
+  error: unknown,
+): Promise<void> {
+  if (message.type !== "confirmation" || !message.sagaId) return;
+
+  try {
+    await replyPublisher.publish({
+      sagaId: message.sagaId,
+      status: "FAILED",
+      reason: error instanceof Error ? error.message : "delivery failed",
+    });
+    Logger.warn(
+      { sagaId: message.sagaId },
+      "[Consumer] Confirmation permanently failed, saga compensation requested",
+    );
+  } catch (err) {
+    Logger.error(
+      { err, sagaId: message.sagaId },
+      "[Consumer] Failed to publish saga failure reply",
+    );
+  }
+}
+
+export async function processMessage(
+  msg: ConsumeMessage,
+  ch: Channel,
+  consumerDeps: ConsumerDeps,
+): Promise<void> {
+  const { idempotency } = consumerDeps;
   const message = parseMessage(msg);
 
   if (!message) {
@@ -89,9 +147,9 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
     return;
   }
 
-  let claimed: boolean;
+  let claim: ClaimResult;
   try {
-    claimed = await idempotency.markIfFirst(message.idempotencyKey);
+    claim = await idempotency.claim(message.idempotencyKey);
   } catch (err) {
     Logger.error(
       { err, key: message.idempotencyKey },
@@ -102,9 +160,9 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
     return;
   }
 
-  if (!claimed) {
+  if (claim === "done") {
     try {
-      await confirmDelivery(message);
+      await confirmDelivery(message, consumerDeps);
       ch.ack(msg);
       Logger.info(
         { type: message.type, key: message.idempotencyKey },
@@ -121,8 +179,18 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
     return;
   }
 
+  if (claim === "in_progress") {
+    Logger.info(
+      { type: message.type, key: message.idempotencyKey },
+      "[Consumer] Delivery already in progress, requeueing",
+    );
+    handleRetry(msg, ch);
+
+    return;
+  }
+
   try {
-    await deliver(message);
+    await deliver(message, consumerDeps);
   } catch (error) {
     await idempotency.release(message.idempotencyKey).catch((err: unknown) => {
       Logger.error(
@@ -134,13 +202,24 @@ async function processMessage(msg: ConsumeMessage, ch: Channel): Promise<void> {
       { err: error, type: message.type },
       "[Consumer] Delivery failed",
     );
-    handleRetry(msg, ch);
+    const deadLettered = handleRetry(msg, ch);
+
+    if (deadLettered) {
+      await publishSagaFailure(message, error);
+    }
 
     return;
   }
 
+  await idempotency.confirm(message.idempotencyKey).catch((err: unknown) => {
+    Logger.error(
+      { err, key: message.idempotencyKey },
+      "[Consumer] Failed to confirm idempotency key after delivery",
+    );
+  });
+
   try {
-    await confirmDelivery(message);
+    await confirmDelivery(message, consumerDeps);
     ch.ack(msg);
     Logger.info(
       { type: message.type, email: message.email },
@@ -159,7 +238,7 @@ function onMessage(msg: ConsumeMessage | null, ch: Channel): void {
   if (!msg) return;
 
   inFlight += 1;
-  void processMessage(msg, ch)
+  void processMessage(msg, ch, deps)
     .catch((err) => {
       Logger.error({ err }, "[Consumer] Unhandled critical error");
       try {

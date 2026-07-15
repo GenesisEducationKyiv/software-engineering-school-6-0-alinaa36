@@ -26,7 +26,7 @@ export class ScanJobProducer {
   async addScanJobs(repos: string[]): Promise<void> {
     const session = await this.queue.open();
     try {
-      for (const batch of chunk(repos, SCAN_BATCH_SIZE)) {
+      for (const batch of chunk([...repos].sort(), SCAN_BATCH_SIZE)) {
         await this.publishBatch(session, batch);
       }
     } finally {
@@ -35,16 +35,16 @@ export class ScanJobProducer {
   }
 
   private async publishBatch(session: IScanQueueSession, batch: string[]): Promise<void> {
-    const { acquired, lockKey } = await this.lockStore.acquireForBatch(batch);
+    const { acquired, lockKey, token } = await this.lockStore.acquireForBatch(batch);
     if (!acquired) {
       Logger.debug('[Redis] Batch is already in the queue. Skipping.');
 
       return;
     }
-    const payload: ScanJobPayload = { repos: batch, lockKey };
+    const payload: ScanJobPayload = { repos: batch, lockKey, lockToken: token };
     if (!session.send(payload)) {
       Logger.warn('[Queue] Buffer full, batch was not sent.');
-      await this.lockStore.unlock(lockKey);
+      await this.lockStore.unlock(lockKey, token);
 
       return;
     }

@@ -36,14 +36,29 @@ export async function handleRetry(
 
   workerRetriesTotal.inc();
 
+  try {
+    await new Promise<void>((resolve, reject) => {
+      channel.sendToQueue(
+        RETRY_QUEUE_NAME,
+        msg.content,
+        {
+          persistent: true,
+          headers: {
+            ...msg.properties.headers,
+            'x-retry-count': retryCount + 1,
+          },
+        },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+  } catch (err) {
+    Logger.error({ err }, '[Worker] Failed to publish retry message, requeueing');
+    channel.nack(msg, false, true);
+
+    return false;
+  }
+
   channel.nack(msg, false, false);
-  channel.sendToQueue(RETRY_QUEUE_NAME, msg.content, {
-    persistent: true,
-    headers: {
-      ...msg.properties.headers,
-      'x-retry-count': retryCount + 1,
-    },
-  });
 
   Logger.warn(
     { attempt: retryCount + 1, maxRetries: WorkerConfig.MAX_RETRIES },

@@ -4,16 +4,16 @@ import type {
   SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
-import type { INotifierService } from '../../sender/interfaces/notifier.interface';
 import type { IRepositoryProvider } from '../interfaces/release-provider.interface';
 import type { ISubscriptionService } from '../interfaces/subscription-service.interface';
+import type { ISubscribeSaga } from '../../saga/interfaces/subscribe-saga.interface';
 import { Logger } from '../../../lib/logger/logger';
 
 export class SubscriptionService implements ISubscriptionService {
   constructor(
     private readonly subscriptionRepository: ISubscriptionRepository,
     private readonly repoProvider: IRepositoryProvider,
-    private readonly notifier: INotifierService,
+    private readonly subscribeSaga: ISubscribeSaga,
   ) {}
 
   async subscribeToRepo(email: string, repository: string): Promise<SubscriptionEntity> {
@@ -32,8 +32,7 @@ export class SubscriptionService implements ISubscriptionService {
       throw new NotFoundError(ErrorCode.REPOSITORY_NOT_FOUND);
     }
 
-    const subscription = await this.subscriptionRepository.upsertPending(email, repository);
-    await this.notifier.sendConfirmationEmail(email, repository, subscription.confirmToken);
+    const subscription = await this.subscribeSaga.start(email, repository);
     Logger.info({ email, repo: repository }, '[Subscription] Pending subscription created');
 
     return subscription;
