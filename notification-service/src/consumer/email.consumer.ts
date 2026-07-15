@@ -49,6 +49,7 @@ let channel: Channel | null = null;
 let consumerTag: string | null = null;
 let shuttingDown = false;
 let inFlight = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function parseMessage(msg: ConsumeMessage): EmailMessage | null {
   try {
@@ -293,8 +294,10 @@ async function setupConsumer(): Promise<void> {
 
 function scheduleReconnect(): void {
   if (shuttingDown) return;
+  if (reconnectTimer) return;
 
-  setTimeout(() => {
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
     if (shuttingDown) return;
 
     setupConsumer().catch((err) => {
@@ -315,6 +318,11 @@ export async function startEmailConsumer(): Promise<void> {
 
 export async function stopEmailConsumer(): Promise<void> {
   shuttingDown = true;
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 
   if (channel && consumerTag) {
     try {

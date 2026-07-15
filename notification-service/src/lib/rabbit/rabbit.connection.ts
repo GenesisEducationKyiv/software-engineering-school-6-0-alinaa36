@@ -6,7 +6,7 @@ import { config } from '../config/env.config';
 let connectionPromise: Promise<ChannelModel> | null = null;
 let closing = false;
 
-async function createRabbitConnection(): Promise<ChannelModel> {
+async function connect(): Promise<ChannelModel> {
   const conn = await amqp.connect(config.rabbit.url);
   Logger.info('[RabbitMQ] Connection established.');
 
@@ -30,7 +30,7 @@ export async function getRabbitConnection(): Promise<ChannelModel> {
     return connectionPromise;
   }
 
-  connectionPromise = createRabbitConnection();
+  connectionPromise = connect();
 
   try {
     return await connectionPromise;
@@ -43,9 +43,17 @@ export async function getRabbitConnection(): Promise<ChannelModel> {
 export async function closeRabbitConnection(): Promise<void> {
   closing = true;
 
-  if (connectionPromise) {
-    const conn = await connectionPromise;
-    connectionPromise = null;
+  if (!connectionPromise) {
+    return;
+  }
+
+  const pending = connectionPromise;
+  connectionPromise = null;
+
+  try {
+    const conn = await pending;
     await conn.close();
+  } catch (err) {
+    Logger.error({ err }, '[RabbitMQ] Error while closing connection');
   }
 }

@@ -18,6 +18,7 @@ import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.
 import { htmlRoutes } from './modules/subscriptions/routes/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
+import { closeRabbitConnection } from './lib/rabbit/rabbit.connection';
 import { config } from './lib/config/env.config';
 import { diPlugin } from './composition/di.plugin';
 import { startConfirmationReplyConsumer } from './modules/saga/adapters/rabbit-confirmation-reply.consumer';
@@ -97,7 +98,7 @@ if (require.main === module) {
 
   const shutdown = (signal: string): void => {
     Logger.info({ signal }, 'Shutting down gracefully');
-    process.exit(0);
+    void closeRabbitConnection().finally(() => process.exit(0));
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));

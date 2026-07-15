@@ -7,4 +7,5 @@ export const WorkerConfig = {
   RECONNECT_DELAY_MS: 5_000,
 
   BATCH_SIZE: 50,
+  REPO_CONCURRENCY: 5,
 } as const;
