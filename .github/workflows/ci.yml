@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         run: npm run type:check
 
+      - name: Architecture dependency check
+        run: npm run deps:check
+
   unit:
     name: Unit Tests
     needs: lint
