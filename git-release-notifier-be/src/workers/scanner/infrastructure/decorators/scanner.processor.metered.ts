@@ -3,10 +3,10 @@ import {
   workerJobsProcessedTotal,
 } from '../../../../lib/metrics/metrics';
 import { withTimer } from '../../../../lib/metrics/metrics.helpers';
-import type { ScanBatchProcessor } from '../../scanner.processor';
+import type { IBatchProcessor } from '../../interfaces/scanner.interfaces';
 
-export class MeteredScanBatchProcessor {
-  constructor(private readonly processor: ScanBatchProcessor) {}
+export class MeteredScanBatchProcessor implements IBatchProcessor {
+  constructor(private readonly processor: IBatchProcessor) {}
 
   async process(repos: string[]): Promise<void> {
     try {

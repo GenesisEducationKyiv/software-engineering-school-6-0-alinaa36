@@ -39,6 +39,8 @@ export async function buildApp(): Promise<App> {
 
   await fastify.register(metricsMiddleware);
 
+  fastify.get('/health', async () => ({ status: 'ok' }));
+
   fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);
 
