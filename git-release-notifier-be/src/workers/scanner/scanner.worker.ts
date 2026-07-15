@@ -26,7 +26,7 @@ async function processMessage(
     return;
   }
 
-  const { repos, lockKey } = payload;
+  const { repos, lockKey, lockToken } = payload;
   Logger.info({ count: repos.length }, '[Worker] Processing repositories');
 
   try {
@@ -34,7 +34,7 @@ async function processMessage(
     channel.ack(msg);
 
     if (lockKey) {
-      await lockStore.unlock(lockKey);
+      await releaseLock(lockStore, lockKey, lockToken);
     }
 
     await delay(WorkerConfig.RATE_LIMIT_DELAY_MS);
@@ -44,12 +44,20 @@ async function processMessage(
     const permanent = await handleRetry(msg, channel);
 
     if (permanent && lockKey) {
-      await lockStore.unlock(lockKey);
+      await releaseLock(lockStore, lockKey, lockToken);
     }
   }
 }
 
-async function startWorker(): Promise<void> {
+async function releaseLock(lockStore: ILockStore, lockKey: string, token: string): Promise<void> {
+  try {
+    await lockStore.unlock(lockKey, token);
+  } catch (err) {
+    Logger.error({ err, lockKey }, '[Worker] Failed to release lock, it will expire via TTL');
+  }
+}
+
+async function subscribe(processor: IBatchProcessor, lockStore: ILockStore): Promise<void> {
   const channel = await createChannel();
   await channel.prefetch(1);
 
@@ -60,11 +68,17 @@ async function startWorker(): Promise<void> {
     deadLetterRoutingKey: QUEUE_NAME,
   });
 
-  const { processor, lockStore, tagRepository } = createWorkerContainer();
+  channel.on('error', (err) => {
+    Logger.error({ err }, '[Worker] Channel error');
+  });
 
-  await startDeliveredConsumer(tagRepository);
-
-  Logger.info('[Worker] Started and ready for work...');
+  channel.on('close', () => {
+    Logger.warn(
+      { reconnectDelayMs: WorkerConfig.RECONNECT_DELAY_MS },
+      '[Worker] Channel closed, scheduling re-subscribe',
+    );
+    scheduleReconnect(processor, lockStore);
+  });
 
   void channel.consume(
     QUEUE_NAME,
@@ -82,6 +96,24 @@ async function startWorker(): Promise<void> {
     },
     { noAck: false },
   );
+
+  Logger.info('[Worker] Started and ready for work...');
+}
+
+function scheduleReconnect(processor: IBatchProcessor, lockStore: ILockStore): void {
+  setTimeout(() => {
+    subscribe(processor, lockStore).catch((err) => {
+      Logger.error({ err }, '[Worker] Re-subscribe failed, retrying');
+      scheduleReconnect(processor, lockStore);
+    });
+  }, WorkerConfig.RECONNECT_DELAY_MS);
+}
+
+async function startWorker(): Promise<void> {
+  const { processor, lockStore, tagRepository } = createWorkerContainer();
+
+  await startDeliveredConsumer(tagRepository);
+  await subscribe(processor, lockStore);
 }
 
 startWorker().catch((err) => {

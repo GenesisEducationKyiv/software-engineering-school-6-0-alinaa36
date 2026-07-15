@@ -8,19 +8,15 @@ export const RECONNECT_DELAY_MS = 5_000;
 
 const RABBIT_URL = config.rabbit.url;
 
-let connection: ChannelModel | null = null;
+let connectionPromise: Promise<ChannelModel> | null = null;
 
-export async function getRabbitConnection(): Promise<ChannelModel> {
-  if (connection) {
-    return connection;
-  }
-
-  connection = await amqp.connect(RABBIT_URL);
+async function createRabbitConnection(): Promise<ChannelModel> {
+  const connection = await amqp.connect(RABBIT_URL);
   Logger.info(' [RabbitMQ] Connection established.');
 
   connection.on('error', (err) => {
     Logger.error({ err }, '[RabbitMQ] Connection error');
-    connection = null;
+    connectionPromise = null;
   });
 
   connection.on('close', () => {
@@ -28,9 +24,33 @@ export async function getRabbitConnection(): Promise<ChannelModel> {
       { reconnectDelayMs: RECONNECT_DELAY_MS },
       '[RabbitMQ] Connection closed, reconnecting',
     );
-    connection = null;
-    setTimeout(getRabbitConnection, RECONNECT_DELAY_MS);
+    connectionPromise = null;
+    scheduleReconnect();
   });
 
   return connection;
+}
+
+function scheduleReconnect(): void {
+  setTimeout(() => {
+    getRabbitConnection().catch((err) => {
+      Logger.error({ err }, '[RabbitMQ] Reconnect failed, retrying');
+      scheduleReconnect();
+    });
+  }, RECONNECT_DELAY_MS);
+}
+
+export async function getRabbitConnection(): Promise<ChannelModel> {
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  connectionPromise = createRabbitConnection();
+
+  try {
+    return await connectionPromise;
+  } catch (err) {
+    connectionPromise = null;
+    throw err;
+  }
 }

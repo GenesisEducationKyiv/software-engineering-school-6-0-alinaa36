@@ -4,7 +4,7 @@ import {
   releaseDeliveredSchema,
   type ReleaseDeliveredEvent,
 } from '@grn/contracts';
-import { getRabbitConnection } from '../../lib/rabbit/rabbit.connection';
+import { getRabbitConnection, RECONNECT_DELAY_MS } from '../../lib/rabbit/rabbit.connection';
 import { Logger } from '../../lib/logger/logger';
 import type { ISubscriptionTagRepository } from '../../modules/subscriptions/interfaces/subscription-repository.interface';
 
@@ -56,6 +56,18 @@ export async function startDeliveredConsumer(
   await channel.assertQueue(RELEASE_DELIVERED_QUEUE_NAME, { durable: true });
   await channel.prefetch(20);
 
+  channel.on('error', (err) => {
+    Logger.error({ err }, '[Delivered] Channel error');
+  });
+
+  channel.on('close', () => {
+    Logger.warn(
+      { reconnectDelayMs: RECONNECT_DELAY_MS },
+      '[Delivered] Channel closed, scheduling re-subscribe',
+    );
+    scheduleReconnect(repository);
+  });
+
   void channel.consume(
     RELEASE_DELIVERED_QUEUE_NAME,
     (msg) => {
@@ -85,4 +97,13 @@ export async function startDeliveredConsumer(
   );
 
   Logger.info('[Delivered] Consumer started, listening for delivery confirmations...');
+}
+
+function scheduleReconnect(repository: ISubscriptionTagRepository): void {
+  setTimeout(() => {
+    startDeliveredConsumer(repository).catch((err) => {
+      Logger.error({ err }, '[Delivered] Re-subscribe failed, retrying');
+      scheduleReconnect(repository);
+    });
+  }, RECONNECT_DELAY_MS);
 }
