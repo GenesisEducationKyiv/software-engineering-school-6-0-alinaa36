@@ -10,13 +10,10 @@ const envSchema = z.object({
   RABBITMQ_URL: z.string().url('Invalid RABBITMQ_URL'),
   GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN is required'),
 
-  SMTP_HOST: z.string().min(1),
-  SMTP_PORT: z.coerce.number(),
-  SMTP_USER: z.string().email(),
-  SMTP_PASS: z.string().min(1),
-
   API_KEY: z.string().min(8, 'API_KEY should be at least 8 characters long'),
-  APP_URL: z.string().url().default('http://localhost:3000'),
+
+  RELEASE_TRANSPORT: z.enum(['queue', 'grpc']).default('queue'),
+  NOTIFICATION_GRPC_URL: z.string().min(1).default('localhost:50052'),
 });
 
 const _env = envSchema.safeParse(process.env);
@@ -47,18 +44,11 @@ export const config = {
   github: {
     token: parsedEnv.GITHUB_TOKEN,
   },
-  mail: {
-    host: parsedEnv.SMTP_HOST,
-    port: parsedEnv.SMTP_PORT,
-    auth: {
-      user: parsedEnv.SMTP_USER,
-      pass: parsedEnv.SMTP_PASS,
-    },
-  },
   api: {
     key: parsedEnv.API_KEY,
   },
-  app: {
-    url: parsedEnv.APP_URL,
+  release: {
+    transport: parsedEnv.RELEASE_TRANSPORT,
+    grpcUrl: parsedEnv.NOTIFICATION_GRPC_URL,
   },
 } as const;

@@ -1,11 +1,11 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { ErrorCode, ValidationError } from '../../../lib/errors/app.error';
 import type { SubscribeDto } from '../dtos/subscription.dto';
-import type { SubscriptionService } from '../services/subscription.service';
+import type { ISubscriptionService } from '../interfaces/subscription-service.interface';
 import { HTTP_MESSAGES } from '../constants/subscription.messages';
 
 export class SubscriptionController {
-  constructor(private subscriptionService: SubscriptionService) {}
+  constructor(private subscriptionService: ISubscriptionService) {}
 
   async subscribe(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const { email, repo } = request.body as SubscribeDto;

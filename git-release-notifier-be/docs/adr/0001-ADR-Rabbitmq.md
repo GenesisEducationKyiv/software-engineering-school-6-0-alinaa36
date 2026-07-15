@@ -4,10 +4,10 @@
 
 1. [Metadata](#metadata)
 2. [Context](#context)
-3. [Constraints](#constraints)
-4. [Considered Options](#considered-options)
-5. [Decision](#decision)
-6. [Consequences](#consequences)
+3. [Decision](#decision)
+4. [Rejected Alternatives](#rejected-alternatives)
+5. [Consequences](#consequences)
+6. [References](#references)
 
 ---
 
@@ -23,18 +23,14 @@
 
 ## Context
 
-The system requires asynchronous communication between its components in order to:
+A message broker is needed in order to:
 
-- Decouple producers from consumers — so that a failure in one does not affect the other
-- Guarantee that a job will not be lost if the consumer is temporarily unavailable
+- Decouple the scanner from the email worker — so that a failure in one does not affect the other
+- Guarantee that a delivery job will not be lost if the worker is temporarily unavailable
 - Be able to retry job processing if something goes wrong
-- Not block the producer while jobs are being processed
+- Not block the cron process while emails are being sent
 
-At the current stage, the primary use case is job delivery between the scanner and the email worker, but the choice is made at the system level to avoid revisiting this decision as the project grows.
-
----
-
-## Constraints
+Constraints taken into account:
 
 - Small team
 - Greenfield project — no existing infrastructure to adapt to
@@ -42,77 +38,56 @@ At the current stage, the primary use case is job delivery between the scanner a
 
 ---
 
-## Considered Options
+## Decision
 
-### RabbitMQ
+**RabbitMQ** was chosen as the message broker for asynchronous job delivery between the scanner and the email worker.
 
-Dedicated message broker designed for reliable asynchronous communication.
+### How it is used in the system
 
-Pros:
+The scanner (producer) groups active subscriptions into batches and publishes them as messages to the queue.
+The worker (consumer) reads jobs from the queue, makes a GraphQL request to the GitHub API for the entire batch
+and sends emails to subscribers whose `last_seen_tag` differs from the new release.
 
-- Strong delivery guarantees (ack/nack, durable queues, persistent messages)
-- Designed specifically for task queues
-- Mature ecosystem with good Node.js support via `amqplib`
-- Supports competing consumers pattern for horizontal scaling
+### Pattern
 
-Cons:
-- Additional infrastructure dependency
-- No built-in deduplication
+The **competing consumers** pattern is used — one or more workers read from the same queue,
+allowing horizontal scaling of processing without any changes to the scanner logic.
+
+### Configuration
+
+| Parameter    | Value                  | Reason                                    |
+| ------------ | ---------------------- | ----------------------------------------- |
+| Queue        | `github-scanner-queue` | Single queue for batches from the scanner |
+| `durable`    | `true`                 | Queue survives a RabbitMQ restart         |
+| `persistent` | `true`                 | Messages are persisted to disk            |
+
+---
+
+## Rejected Alternatives
 
 ### BullMQ
 
 BullMQ is an npm library for job queue management built on top of Redis.
+It could have solved the asynchronous batch processing task and since Redis is already used in the project,
+no additional infrastructure would have been required.
 
-Pros:
+Not chosen because:
 
-- No additional infrastructure required if Redis is already used in the project
-- Simple API, good Node.js integration
-- Built-in support for retries, delays and job prioritization
-
-Cons:
-
-- Redis was not designed as a reliable message broker — no support for ack/nack, durable queues or persistent messages at the level of a dedicated broker
-- Mixing cache and queue responsibilities on the same instance complicates the architecture and creates a single point of failure for two different concerns
+- The queue is entirely dependent on Redis — if Redis goes down, both the cache and the queue are lost simultaneously
+- Redis was not designed as a reliable message broker; RabbitMQ provides stronger delivery guarantees
+- Mixing responsibilities — Redis is already used for caching GitHub API responses,
+  using it as a queue as well complicates the understanding of the architecture
 
 ### Kafka
 
 Kafka is a distributed event streaming platform designed for high throughput and message history retention.
 
-Pros:
+Not chosen because:
 
-- Extremely high throughput
-- Message history retention — consumers can replay events
-- Strong delivery guarantees at scale
-
-Cons:
-
-- Overly complex for small teams — requires ZooKeeper or KRaft and separate ops maintenance
-- Optimised for event streaming, not task queues
-- High operational complexity
-
----
-
-## Decision
-
-**RabbitMQ** was chosen as the message broker for asynchronous communication between system components.
-
-### How it is used in the system
-
-RabbitMQ serves as the message broker for asynchronous communication between producers and consumers. Producers publish jobs to a queue without waiting for processing to complete.
-Consumers read and process messages independently, allowing each component to operate at its own pace.
-
-### Pattern
-
-The **competing consumers** pattern is used — one or more workers read from the same queue,
-allowing horizontal scaling of processing without any changes to the producer logic.
-
-### Configuration
-
-| Parameter    | Value  | Reason                                                                                                                 |
-| ------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `durable`    | `true` | Queue survives a broker restart — no jobs are lost on failure                                                          |
-| `persistent` | `true` | Messages are persisted to disk — survive even if the broker crashes before processing                                  |
-| `prefetch`   | `1`    | Consumer processes one message at a time before acknowledging — ensures fair distribution and prevents memory overload |
+- Overly complex for the current project size — requires ZooKeeper or KRaft and separate ops maintenance
+- The project uses a task queue pattern, not event streaming —
+  Kafka is optimised for a different scenario
+- High operational complexity for a team of 1–3 people
 
 ---
 
@@ -120,17 +95,15 @@ allowing horizontal scaling of processing without any changes to the producer lo
 
 ### Positive
 
-- Producers and consumers operate independently — a failure in one component does not affect the other
-- Messages will not be lost on a broker restart
-- Multiple workers can run in parallel without any changes to the producer logic
+- The scanner and worker operate independently — a failure in the email service does not stop scanning
+- Messages with `durable: true` and `persistent: true` will not be lost on a RabbitMQ restart
+- Multiple workers can run in parallel without any changes to the scanner logic
+- The cron job is not blocked while emails are being sent — it publishes a batch and moves on
 - RabbitMQ has a mature ecosystem and good Node.js support via `amqplib`
 
 ### Negative / Risks
 
 - If RabbitMQ goes down the queue becomes completely unavailable — health checks and alerts are required
-- Message ordering is not guaranteed with multiple workers (competing consumers)
-- No built-in deduplication — if a message is requeued and processed twice, duplicate notifications can be sent
-- Debugging failed messages requires access to the RabbitMQ management UI or DLQ inspection
 
 ### Trade-offs / Neutral Changes
 
@@ -138,6 +111,3 @@ allowing horizontal scaling of processing without any changes to the producer lo
 - Local development requires `docker-compose up rabbitmq`
 - Switching to a different broker in the future only requires rewriting `rabbit.channel.ts`
   and `rabbit.connection.ts`; the worker logic remains unchanged
-- Local development requires running an additional service
-- Switching to a different broker requires rewriting the transport layer as well as adapting producer and consumer behavior
-

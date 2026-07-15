@@ -8,3 +8,8 @@ export interface GithubRepositoryNode {
     tagName: string;
   } | null;
 }
+
+export interface GithubGraphQLError {
+  type?: string;
+  message: string;
+}

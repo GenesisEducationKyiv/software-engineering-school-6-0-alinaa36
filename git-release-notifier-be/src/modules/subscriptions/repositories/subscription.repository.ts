@@ -1,13 +1,13 @@
-import type { Subscription } from '@prisma/client';
-import { prisma } from '../../../lib/prisma';
+import type { PrismaClient, Subscription } from '@prisma/client';
 import type {
+  IScannerSubscriptionRepository,
   ISubscriptionRepository,
+  ISubscriptionTagRepository,
+  OutdatedSubscriber,
   RepositoryGroup,
   SubscriptionEntity,
   SubscriptionSummary,
 } from '../interfaces/subscription-repository.interface';
-import type { OutdatedSubscriber } from '../../../workers/scanner/types/scanner.type';
-import type { IScannerSubscriptionRepository } from '../../../workers/scanner/interfaces/scanner.interfaces';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',
@@ -15,10 +15,12 @@ export enum SubscriptionStatus {
 }
 
 export class SubscriptionRepository
-  implements ISubscriptionRepository, IScannerSubscriptionRepository
+  implements ISubscriptionRepository, IScannerSubscriptionRepository, ISubscriptionTagRepository
 {
+  constructor(private readonly prisma: PrismaClient) {}
+
   async upsertPending(email: string, repository: string): Promise<SubscriptionEntity> {
-    const raw = await prisma.subscription.upsert({
+    const raw = await this.prisma.subscription.upsert({
       where: { email_repository: { email, repository } },
       update: { status: SubscriptionStatus.PENDING },
       create: { email, repository, status: SubscriptionStatus.PENDING },
@@ -28,13 +30,13 @@ export class SubscriptionRepository
   }
 
   async findByConfirmToken(token: string): Promise<SubscriptionEntity | null> {
-    const raw = await prisma.subscription.findUnique({ where: { confirmToken: token } });
+    const raw = await this.prisma.subscription.findUnique({ where: { confirmToken: token } });
 
     return raw ? this.toEntity(raw) : null;
   }
 
   async checkIfActiveExists(email: string, repository: string): Promise<boolean> {
-    const existing = await prisma.subscription.findFirst({
+    const existing = await this.prisma.subscription.findFirst({
       where: { email, repository, status: SubscriptionStatus.ACTIVE },
     });
 
@@ -42,7 +44,7 @@ export class SubscriptionRepository
   }
 
   async activate(id: string): Promise<SubscriptionEntity> {
-    const raw = await prisma.subscription.update({
+    const raw = await this.prisma.subscription.update({
       where: { id },
       data: { status: SubscriptionStatus.ACTIVE },
     });
@@ -51,19 +53,27 @@ export class SubscriptionRepository
   }
 
   async findByUnsubscribeToken(token: string): Promise<SubscriptionEntity | null> {
-    const raw = await prisma.subscription.findUnique({ where: { unsubscribeToken: token } });
+    const raw = await this.prisma.subscription.findUnique({ where: { unsubscribeToken: token } });
 
     return raw ? this.toEntity(raw) : null;
   }
 
   async delete(id: string): Promise<SubscriptionEntity> {
-    const raw = await prisma.subscription.delete({ where: { id } });
+    const raw = await this.prisma.subscription.delete({ where: { id } });
 
     return this.toEntity(raw);
   }
 
+  async deleteIfPending(id: string): Promise<boolean> {
+    const { count } = await this.prisma.subscription.deleteMany({
+      where: { id, status: SubscriptionStatus.PENDING },
+    });
+
+    return count > 0;
+  }
+
   async findByEmail(email: string): Promise<SubscriptionSummary[]> {
-    const rows = await prisma.subscription.findMany({
+    const rows = await this.prisma.subscription.findMany({
       where: { email },
       select: { repository: true, status: true, createdAt: true },
     });
@@ -75,14 +85,15 @@ export class SubscriptionRepository
   }
 
   async countActive(): Promise<number> {
-    return prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE } });
+    return this.prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE } });
   }
 
   async groupByRepository(): Promise<RepositoryGroup[]> {
-    const rows = await prisma.subscription.groupBy({
+    const rows = await this.prisma.subscription.groupBy({
       by: ['repository'],
       where: { status: SubscriptionStatus.ACTIVE },
       _count: { repository: true },
+      orderBy: { repository: 'asc' },
     });
 
     return rows.map((row) => ({
@@ -92,7 +103,7 @@ export class SubscriptionRepository
   }
 
   async getOutdatedSubscribers(repoName: string, newTag: string): Promise<OutdatedSubscriber[]> {
-    return prisma.subscription.findMany({
+    return this.prisma.subscription.findMany({
       where: {
         repository: repoName,
         status: SubscriptionStatus.ACTIVE,
@@ -102,10 +113,10 @@ export class SubscriptionRepository
     });
   }
 
-  async updateTags(subscriberIds: string[], newTag: string): Promise<void> {
-    await prisma.subscription.updateMany({
-      where: { id: { in: subscriberIds } },
-      data: { lastSeenTag: newTag },
+  async advanceTag(email: string, repository: string, tag: string): Promise<void> {
+    await this.prisma.subscription.updateMany({
+      where: { email, repository },
+      data: { lastSeenTag: tag },
     });
   }
 

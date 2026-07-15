@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import supertest from 'supertest';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import type { App } from '../../app';
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { randomUUID } from 'crypto';
 
-vi.mock('../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),
@@ -14,15 +14,6 @@ vi.mock('../../lib/rabbit/rabbit.connection', () => ({
       close: vi.fn(),
     }),
   }),
-}));
-
-vi.mock('nodemailer', () => ({
-  default: {
-    createTransport: vi.fn().mockReturnValue({
-      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
-    }),
-    getTestMessageUrl: vi.fn().mockReturnValue('http://test-url'),
-  },
 }));
 
 // ---- constants ----
@@ -106,7 +97,7 @@ async function createActiveSubscription(
 // ---- setup ----
 
 describe('Subscription REST API', () => {
-  let app: FastifyInstance;
+  let app: App;
   let client: ReturnType<typeof supertest>;
   let prisma: PrismaClient;
   let redis: Redis;
@@ -224,16 +215,17 @@ describe('Subscription REST API', () => {
     });
   });
 
-  // ---- GET /api/confirm/:token ----
+  // ---- GET /api/confirm/:token (JSON API) ----
 
   describe('GET /api/confirm/:token', () => {
-    it('активує підписку і повертає HTML сторінку', async () => {
+    it('активує підписку і повертає JSON', async () => {
       const sub = await createPendingSubscription(prisma);
 
       const response = await client.get(`/api/confirm/${sub.confirmToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toContain('text/html');
+      expect(response.headers['content-type']).toContain('application/json');
+      expect(response.body.status).toBe('success');
 
       const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(updated?.status).toBe('ACTIVE');
@@ -266,16 +258,40 @@ describe('Subscription REST API', () => {
     });
   });
 
-  // ---- GET /api/unsubscribe/:token ----
+  // ---- GET /confirm/:token (HTML view) ----
+
+  describe('GET /confirm/:token', () => {
+    it('активує підписку і повертає HTML сторінку', async () => {
+      const sub = await createPendingSubscription(prisma);
+
+      const response = await client.get(`/confirm/${sub.confirmToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/html');
+
+      const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
+      expect(updated?.status).toBe('ACTIVE');
+    });
+
+    it('повертає HTML з помилкою якщо токен не існує', async () => {
+      const response = await client.get('/confirm/invalid-token-xyz');
+
+      expect(response.status).toBe(404);
+      expect(response.headers['content-type']).toContain('text/html');
+    });
+  });
+
+  // ---- GET /api/unsubscribe/:token (JSON API) ----
 
   describe('GET /api/unsubscribe/:token', () => {
-    it('видаляє підписку і повертає HTML сторінку', async () => {
+    it('видаляє підписку і повертає JSON', async () => {
       const sub = await createActiveSubscription(prisma);
 
       const response = await client.get(`/api/unsubscribe/${sub.unsubscribeToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toContain('text/html');
+      expect(response.headers['content-type']).toContain('application/json');
+      expect(response.body.status).toBe('success');
 
       const deleted = await prisma.subscription.findUnique({ where: { id: sub.id } });
       expect(deleted).toBeNull();
@@ -305,6 +321,29 @@ describe('Subscription REST API', () => {
         where: { email: 'user2@example.com' },
       });
       expect(remaining).not.toBeNull();
+    });
+  });
+
+  // ---- GET /unsubscribe/:token (HTML view) ----
+
+  describe('GET /unsubscribe/:token', () => {
+    it('видаляє підписку і повертає HTML сторінку', async () => {
+      const sub = await createActiveSubscription(prisma);
+
+      const response = await client.get(`/unsubscribe/${sub.unsubscribeToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/html');
+
+      const deleted = await prisma.subscription.findUnique({ where: { id: sub.id } });
+      expect(deleted).toBeNull();
+    });
+
+    it('повертає HTML з помилкою якщо токен не існує', async () => {
+      const response = await client.get('/unsubscribe/invalid-token-xyz');
+
+      expect(response.status).toBe(404);
+      expect(response.headers['content-type']).toContain('text/html');
     });
   });
 

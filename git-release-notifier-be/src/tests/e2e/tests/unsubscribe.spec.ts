@@ -8,14 +8,14 @@ test.describe('Відписка', () => {
     waitForDbState,
   }) => {
     // Arrange
-    const sub = await createActiveSubscription({ repository: 'react/react' });
+    const sub = await createActiveSubscription({ repository: 'facebook/react' });
 
     // Act
-    await page.goto(`/api/unsubscribe/${sub.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub.unsubscribeToken}`);
 
     // Assert — UI
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
-    await expect(page.getByTestId('repo-name')).toContainText('react/react');
+    await expect(page.getByTestId('repo-name')).toContainText('facebook/react');
 
     // Assert — БД
     await waitForDbState(async () => {
@@ -38,7 +38,7 @@ test.describe('Відписка', () => {
     // Arrange
     const sub1 = await createActiveSubscription({
       email: uniqueEmail,
-      repository: 'react/react',
+      repository: 'facebook/react',
       confirmToken: `confirm-1-${Date.now()}`,
       unsubscribeToken: `unsub-1-${Date.now()}`,
     });
@@ -50,7 +50,7 @@ test.describe('Відписка', () => {
     });
 
     // Act
-    await page.goto(`/api/unsubscribe/${sub1.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub1.unsubscribeToken}`);
 
     await waitForDbState(async () => {
       const deleted = await prisma.subscription.findUnique({ where: { id: sub1.id } });

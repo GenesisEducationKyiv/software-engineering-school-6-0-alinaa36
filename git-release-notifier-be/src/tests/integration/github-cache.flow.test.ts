@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import supertest from 'supertest';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import type { App } from '../../app';
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { REDIS_CACHE_TTL_SECONDS } from '../../modules/common/constants/api.constants';
 
-vi.mock('../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),
@@ -14,15 +14,6 @@ vi.mock('../../lib/rabbit/rabbit.connection', () => ({
       close: vi.fn(),
     }),
   }),
-}));
-
-vi.mock('nodemailer', () => ({
-  default: {
-    createTransport: vi.fn().mockReturnValue({
-      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
-    }),
-    getTestMessageUrl: vi.fn().mockReturnValue('http://test-url'),
-  },
 }));
 
 // ---- constants ----
@@ -49,7 +40,7 @@ function mockGithubRelease(repo: string, tag: string) {
 // ---- setup ----
 
 describe('Redis Cache integration', () => {
-  let app: FastifyInstance;
+  let app: App;
   let prisma: PrismaClient;
   let redis: Redis;
   let client: ReturnType<typeof supertest>;
@@ -142,6 +133,24 @@ describe('Redis Cache integration', () => {
         .send({ email: 'user2@example.com', repo: TEST_REPO });
 
       expect(response.status).toBe(201);
+    });
+  });
+
+  // --- помилки не кешуються ---
+
+  describe('помилки GitHub не зберігаються в кеш', () => {
+    it('не кешує відповідь при GraphQL rate limit (HTTP 200 + RATE_LIMITED)', async () => {
+      nock('https://api.github.com')
+        .post('/graphql')
+        .reply(200, {
+          data: null,
+          errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }],
+        });
+
+      await client.post('/api/subscribe').send({ email: 'user@example.com', repo: TEST_REPO });
+
+      const keys = await redis.keys(CACHE_KEY_PATTERN);
+      expect(keys).toHaveLength(0);
     });
   });
 

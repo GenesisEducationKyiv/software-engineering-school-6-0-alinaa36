@@ -4,8 +4,8 @@ export const WorkerConfig = {
 
   RATE_LIMIT_DELAY_MS: 1_000,
 
+  RECONNECT_DELAY_MS: 5_000,
+
   BATCH_SIZE: 50,
-  MAX_TIME_PER_REPO_SEC: 2,
-  MAX_TIME_PER_EMAIL_SEC: 1,
-  SAFETY_BUFFER_SEC: 30,
+  REPO_CONCURRENCY: 5,
 } as const;

@@ -1,5 +1,8 @@
-import type { ScanJobPayload } from '../../../workers/scanner/types/scanner.type';
-import type { IScanQueue, IScanQueueSession } from '../interfaces/scan-queue.interface';
+import type {
+  IScanQueue,
+  IScanQueueSession,
+  ScanJobPayload,
+} from '../interfaces/scan-queue.interface';
 import { createChannel, QUEUE_NAME } from '../../../lib/rabbit/rabbit.channel';
 
 export class RabbitScanQueue implements IScanQueue {

@@ -7,20 +7,28 @@ import type { OpenAPIV2 } from 'openapi-types';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
+import type { Logger as PinoLogger } from 'pino';
+import type { Server, IncomingMessage, ServerResponse } from 'http';
 import { register } from './lib/metrics/metrics';
 import { Logger } from './lib/logger/logger';
 import { errorHandler } from './lib/errors/error.handler';
-import { diPlugin } from './modules/common/plugins/di.plugin';
 import { metricsMiddleware } from './modules/common/middlewares/metrics.middleware';
-import NotifierModule from './modules/scheduler/scheduler.module';
+import SchedulerModule from './modules/scheduler/scheduler.module';
 import { subscriptionRoutes } from './modules/subscriptions/routes/subscription.route';
-import { htmlRoutes } from './lib/html/html.routes';
+import { htmlRoutes } from './modules/subscriptions/routes/html.routes';
 import { fastifyCors } from '@fastify/cors';
 import { startGrpcServer } from './grpc/grpc-server';
+import { closeRabbitConnection } from './lib/rabbit/rabbit.connection';
 import { config } from './lib/config/env.config';
+import { diPlugin } from './composition/di.plugin';
+import { startConfirmationReplyConsumer } from './modules/saga/adapters/rabbit-confirmation-reply.consumer';
 
-export async function buildApp(): Promise<FastifyInstance> {
-  const fastify = Fastify({ logger: false });
+export type App = FastifyInstance<Server, IncomingMessage, ServerResponse, PinoLogger>;
+
+export async function buildApp(): Promise<App> {
+  const fastify = Fastify<Server, IncomingMessage, ServerResponse, PinoLogger>({
+    loggerInstance: Logger,
+  });
 
   fastify.setErrorHandler(errorHandler);
 
@@ -30,6 +38,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await fastify.register(metricsMiddleware);
+
+  fastify.get('/health', async () => ({ status: 'ok' }));
 
   fastify.get('/metrics', async (_req, reply) => {
     reply.header('Content-Type', register.contentType);
@@ -59,23 +69,25 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(diPlugin);
   await fastify.register(htmlRoutes);
   await fastify.register(subscriptionRoutes, { prefix: '/api' });
-  await fastify.register(NotifierModule);
+  await fastify.register(SchedulerModule);
 
   return fastify;
 }
 
 if (require.main === module) {
-  void import('./workers/scanner/scanner.worker');
-
   buildApp()
     .then(async (fastify) => {
       try {
         await fastify.listen({ port: config.server.port, host: '0.0.0.0' });
-        Logger.info('[REST API] Server is running on http://localhost:' + config.server.port);
-        Logger.info(
-          '[REST API] Swagger UI available at http://localhost:' + config.server.port + '/docs',
-        );
+
+        Logger.info({ port: config.server.port }, '[REST API] Server is running');
+        Logger.info({ port: config.server.port, path: '/docs' }, '[REST API] Swagger UI available');
+
         startGrpcServer(fastify.subscriptionService);
+
+        void startConfirmationReplyConsumer(fastify.subscribeSaga).catch((err) => {
+          Logger.error({ err }, '[Saga] Failed to start confirmation reply consumer');
+        });
       } catch (err) {
         Logger.error({ err }, '[App] Server failed to start');
         process.exit(1);
@@ -85,9 +97,10 @@ if (require.main === module) {
       Logger.error({ err }, '[App] Failed to build app');
       process.exit(1);
     });
+
   const shutdown = (signal: string): void => {
-    Logger.info(`Received ${signal}. Shutting down gracefully...`);
-    process.exit(0);
+    Logger.info({ signal }, 'Shutting down gracefully');
+    void closeRabbitConnection().finally(() => process.exit(0));
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));

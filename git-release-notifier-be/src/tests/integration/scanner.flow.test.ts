@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import nock from 'nock';
-import type { FastifyInstance } from 'fastify';
+import type { App } from '../../app';
 import type { PrismaClient } from '@prisma/client';
 import { config } from '../../lib/config/env.config';
 import { RedisCacheRepository } from '../../modules/common/cache/cache.repository';
+import { REDIS_CACHE_TTL_SECONDS } from '../../modules/common/constants/api.constants';
 import { GithubClient } from '../../modules/github/client/github.client';
 import { CachedGithubClient } from '../../modules/github/decorators/cached-github.decorator';
 import { ScanBatchProcessor } from '../../workers/scanner/scanner.processor';
@@ -12,8 +13,9 @@ import { SubscriptionRepository } from '../../modules/subscriptions/repositories
 import type { INotifier } from '../../workers/scanner/interfaces/scanner.interfaces';
 import type Redis from 'ioredis';
 import { randomUUID } from 'crypto';
+import { prisma } from '../../lib/prisma';
 
-vi.mock('../../lib/rabbit/rabbit.connection', () => ({
+vi.mock('../../../../lib/rabbit/rabbit.connection', () => ({
   getRabbitConnection: vi.fn().mockResolvedValue({
     createChannel: vi.fn().mockResolvedValue({
       assertQueue: vi.fn(),
@@ -21,15 +23,6 @@ vi.mock('../../lib/rabbit/rabbit.connection', () => ({
       close: vi.fn(),
     }),
   }),
-}));
-
-vi.mock('nodemailer', () => ({
-  default: {
-    createTransport: vi.fn().mockReturnValue({
-      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-id' }),
-    }),
-    getTestMessageUrl: vi.fn().mockReturnValue('http://test-url'),
-  },
 }));
 
 // ---- constants ----
@@ -77,11 +70,12 @@ function makeProcessor(notifier: INotifier, redis: Redis) {
   const githubClient = new CachedGithubClient(
     new GithubClient(config.github.token),
     new RedisCacheRepository(redis),
+    REDIS_CACHE_TTL_SECONDS,
   );
 
   return new ScanBatchProcessor({
     provider: new GithubReleaseAdapter(githubClient),
-    repository: new SubscriptionRepository(),
+    repository: new SubscriptionRepository(prisma),
     notifier,
   });
 }
@@ -112,7 +106,7 @@ async function createActiveSubscription(
 // ---- setup ----
 
 describe('ScanBatchProcessor integration', () => {
-  let app: FastifyInstance;
+  let app: App;
   let prisma: PrismaClient;
   let redis: Redis;
 
@@ -161,14 +155,14 @@ describe('ScanBatchProcessor integration', () => {
       expect(nock.isDone()).toBe(true);
     });
 
-    it('оновлює lastSeenTag в БД', async () => {
+    it('НЕ зсуває lastSeenTag (зсув — відповідальність delivered-consumer після доставки)', async () => {
       const sub = await createActiveSubscription(prisma);
       mockGithubRelease(TEST_REPO, NEW_TAG);
 
       await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
-      expect(updated?.lastSeenTag).toBe(NEW_TAG);
+      expect(updated?.lastSeenTag).toBe(OLD_TAG);
     });
   });
 
@@ -220,7 +214,7 @@ describe('ScanBatchProcessor integration', () => {
       expect(nock.isDone()).toBe(true);
     });
 
-    it('оновлює lastSeenTag після першого релізу', async () => {
+    it('НЕ зсуває lastSeenTag після першого релізу (зсув — після доставки)', async () => {
       const sub = await createActiveSubscription(prisma, {
         lastSeenTag: null,
         confirmToken: 'confirm-tok-first-2',
@@ -231,7 +225,7 @@ describe('ScanBatchProcessor integration', () => {
       await makeProcessor(makeNotifier(), redis).process([TEST_REPO]);
 
       const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
-      expect(updated?.lastSeenTag).toBe(NEW_TAG);
+      expect(updated?.lastSeenTag).toBeNull();
     });
   });
 
@@ -283,7 +277,7 @@ describe('ScanBatchProcessor integration', () => {
       expect(nock.isDone()).toBe(true);
     });
 
-    it('оновлює lastSeenTag для всіх підписників', async () => {
+    it('НЕ зсуває lastSeenTag підписників (зсув — після доставки)', async () => {
       const sub1 = await createActiveSubscription(prisma, {
         email: 'user1@example.com',
         confirmToken: 'confirm-1',
@@ -300,8 +294,33 @@ describe('ScanBatchProcessor integration', () => {
 
       const updated1 = await prisma.subscription.findUnique({ where: { id: sub1.id } });
       const updated2 = await prisma.subscription.findUnique({ where: { id: sub2.id } });
-      expect(updated1?.lastSeenTag).toBe(NEW_TAG);
-      expect(updated2?.lastSeenTag).toBe(NEW_TAG);
+      expect(updated1?.lastSeenTag).toBe(OLD_TAG);
+      expect(updated2?.lastSeenTag).toBe(OLD_TAG);
+    });
+  });
+
+  // --- зсув тегу після підтвердження доставки (delivered-event) ---
+
+  describe('advanceTag — зсув тегу по факту доставки', () => {
+    it('зсуває lastSeenTag для (email, repo)', async () => {
+      const sub = await createActiveSubscription(prisma);
+      const repository = new SubscriptionRepository(prisma);
+
+      await repository.advanceTag(TEST_EMAIL, TEST_REPO, NEW_TAG);
+
+      const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
+      expect(updated?.lastSeenTag).toBe(NEW_TAG);
+    });
+
+    it('повторний виклик ідемпотентний (тег лишається тим самим)', async () => {
+      const sub = await createActiveSubscription(prisma);
+      const repository = new SubscriptionRepository(prisma);
+
+      await repository.advanceTag(TEST_EMAIL, TEST_REPO, NEW_TAG);
+      await repository.advanceTag(TEST_EMAIL, TEST_REPO, NEW_TAG);
+
+      const updated = await prisma.subscription.findUnique({ where: { id: sub.id } });
+      expect(updated?.lastSeenTag).toBe(NEW_TAG);
     });
   });
 });

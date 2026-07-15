@@ -1,40 +1,42 @@
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /repo
 
-COPY package*.json ./
-COPY prisma ./prisma/
+COPY package.json package-lock.json ./
+COPY packages/contracts/package.json packages/contracts/package.json
+COPY git-release-notifier-be/package.json git-release-notifier-be/package.json
+COPY notification-service/package.json notification-service/package.json
+COPY git-release-notifier-be/prisma git-release-notifier-be/prisma
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
-COPY . .
+COPY packages/contracts packages/contracts
+COPY git-release-notifier-be git-release-notifier-be
 
-RUN npx prisma generate --schema=prisma/schema.prisma
-
-RUN npm run build
-
-RUN mkdir -p dist/grpc/proto && \
-    find src -name "subscription.proto" -exec cp {} dist/grpc/proto/subscription.proto \;
-    
-
-RUN mkdir -p dist/docs && cp src/docs/swagger.yaml dist/docs/swagger.yaml
+RUN npm run build -w @grn/contracts
+RUN npx prisma generate --schema=git-release-notifier-be/prisma/schema.prisma
+RUN npm run build -w git-release-notifier-be
 
 FROM node:20-alpine AS runner
 
-WORKDIR /app
+WORKDIR /repo
 
 RUN apk add --no-cache openssl
 
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json package-lock.json ./
+COPY packages/contracts/package.json packages/contracts/package.json
+COPY git-release-notifier-be/package.json git-release-notifier-be/package.json
+COPY notification-service/package.json notification-service/package.json
+COPY git-release-notifier-be/prisma git-release-notifier-be/prisma
+COPY git-release-notifier-be/prisma.config.ts git-release-notifier-be/prisma.config.ts
 
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /repo/packages/contracts/dist packages/contracts/dist
+COPY --from=builder /repo/git-release-notifier-be/dist git-release-notifier-be/dist
 
-COPY --from=builder /app/prisma ./prisma
+RUN npm ci --omit=dev --ignore-scripts
+RUN npx prisma generate --schema=git-release-notifier-be/prisma/schema.prisma
 
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-
-RUN npx prisma generate --schema=prisma/schema.prisma
+WORKDIR /repo/git-release-notifier-be
 
 EXPOSE 3000
 

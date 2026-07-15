@@ -3,30 +3,75 @@ import amqp from 'amqplib';
 import 'dotenv/config';
 import { Logger } from '../logger/logger';
 import { config } from '../config/env.config';
-import { RECONNECT_DELAY_MS } from '../../modules/common/constants/api.constants';
+
+export const RECONNECT_DELAY_MS = 5_000;
 
 const RABBIT_URL = config.rabbit.url;
 
-let connection: ChannelModel | null = null;
+let connectionPromise: Promise<ChannelModel> | null = null;
+let closing = false;
+
+async function connect(): Promise<ChannelModel> {
+  const conn = await amqp.connect(RABBIT_URL);
+  Logger.info('[RabbitMQ] Connection established.');
+
+  conn.on('error', (err) => {
+    Logger.error({ err }, '[RabbitMQ] Connection error');
+    connectionPromise = null;
+  });
+
+  conn.on('close', () => {
+    connectionPromise = null;
+    if (closing) return;
+
+    Logger.warn(
+      { reconnectDelayMs: RECONNECT_DELAY_MS },
+      '[RabbitMQ] Connection closed, reconnecting',
+    );
+    scheduleReconnect();
+  });
+
+  return conn;
+}
+
+function scheduleReconnect(): void {
+  setTimeout(() => {
+    getRabbitConnection().catch((err) => {
+      Logger.error({ err }, '[RabbitMQ] Reconnect failed, retrying');
+      scheduleReconnect();
+    });
+  }, RECONNECT_DELAY_MS);
+}
 
 export async function getRabbitConnection(): Promise<ChannelModel> {
-  if (connection) {
-    return connection;
+  if (connectionPromise) {
+    return connectionPromise;
   }
 
-  connection = await amqp.connect(RABBIT_URL);
-  Logger.info(' [RabbitMQ] Connection established.');
+  connectionPromise = connect();
 
-  connection.on('error', (err) => {
-    Logger.error({ err }, '[RabbitMQ] Connection error');
-    connection = null;
-  });
+  try {
+    return await connectionPromise;
+  } catch (err) {
+    connectionPromise = null;
+    throw err;
+  }
+}
 
-  connection.on('close', () => {
-    Logger.warn(`[RabbitMQ] Connection closed. Reconnecting in ${RECONNECT_DELAY_MS} ms...`);
-    connection = null;
-    setTimeout(getRabbitConnection, RECONNECT_DELAY_MS);
-  });
+export async function closeRabbitConnection(): Promise<void> {
+  closing = true;
 
-  return connection;
+  if (!connectionPromise) {
+    return;
+  }
+
+  const pending = connectionPromise;
+  connectionPromise = null;
+
+  try {
+    const conn = await pending;
+    await conn.close();
+  } catch (err) {
+    Logger.error({ err }, '[RabbitMQ] Error while closing connection');
+  }
 }

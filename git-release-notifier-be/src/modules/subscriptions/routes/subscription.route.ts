@@ -15,7 +15,7 @@ export function subscriptionRoutes(fastify: FastifyInstance): void {
 
   fastify.get('/subscriptions', authenticated, (req, rep) => controller.getSubscriptions(req, rep));
 
-  fastify.get('/confirm', (req, rep) => controller.confirm(req, rep));
+  fastify.get('/confirm/:token', (req, rep) => controller.confirm(req, rep));
 
-  fastify.get('/unsubscribe', (req, rep) => controller.unsubscribe(req, rep));
+  fastify.get('/unsubscribe/:token', (req, rep) => controller.unsubscribe(req, rep));
 }

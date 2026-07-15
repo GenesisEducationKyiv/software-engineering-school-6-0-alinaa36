@@ -1,5 +1,5 @@
 import type { BatchReleaseResult } from '../../../modules/github/types/github-info.type';
-import type { OutdatedSubscriber } from '../types/scanner.type';
+import type { IScannerSubscriptionRepository } from '../../../modules/subscriptions/interfaces/subscription-repository.interface';
 import type { ReleaseNotificationPayload } from '../../../modules/sender/interfaces/notifier.interface';
 
 export interface ISourceProvider {
@@ -10,13 +10,12 @@ export interface INotifier {
   sendReleaseNotification(payload: ReleaseNotificationPayload): Promise<void>;
 }
 
-export interface IScannerSubscriptionRepository {
-  getOutdatedSubscribers(repo: string, newTag: string): Promise<Array<OutdatedSubscriber>>;
-  updateTags(subscriberIds: string[], newTag: string): Promise<void>;
-}
-
 export interface ProcessorDeps {
   provider: ISourceProvider;
   notifier: INotifier;
   repository: IScannerSubscriptionRepository;
+}
+
+export interface IBatchProcessor {
+  process(repos: string[]): Promise<void>;
 }

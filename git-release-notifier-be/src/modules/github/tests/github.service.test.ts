@@ -34,7 +34,7 @@ function makeDecorator(
 ) {
   const client = makeClient(options.releases ?? {});
   const cache = makeCache(options.cached ?? null);
-  const decorator = new CachedGithubClient(client, cache);
+  const decorator = new CachedGithubClient(client, cache, REDIS_CACHE_TTL_SECONDS);
 
   return { decorator, client, cache };
 }
@@ -80,7 +80,6 @@ describe('CachedGithubClient', () => {
 
       expect(client.getLatestReleasesBatch).toHaveBeenCalledWith(['facebook/react', 'vuejs/vue']);
     });
-  });
 
     it('повертає результат від GitHub', async () => {
       const { decorator } = makeDecorator({ releases: RELEASES });

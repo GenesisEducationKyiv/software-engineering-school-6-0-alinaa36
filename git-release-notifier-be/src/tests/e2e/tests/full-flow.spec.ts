@@ -37,7 +37,7 @@ test.describe('Повний flow підписки', () => {
       where: { email: uniqueEmail, repository: EXISTING_REPO },
     });
 
-    await page.goto(`/api/confirm/${sub?.confirmToken}`);
+    await page.goto(`/confirm/${sub?.confirmToken}`);
 
     await expect(page.locator('h1')).toContainText('Підписку підтверджено!');
     await expect(page.getByTestId('repo-name')).toContainText(EXISTING_REPO);
@@ -55,7 +55,7 @@ test.describe('Повний flow підписки', () => {
     await expect(page.getByTestId('badge-active')).toContainText('Активна');
 
     // --- Крок 4: відписка ---
-    await page.goto(`/api/unsubscribe/${sub?.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub?.unsubscribeToken}`);
 
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
     await expect(page.getByTestId('repo-name')).toContainText(EXISTING_REPO);
@@ -85,7 +85,7 @@ test.describe('Повний flow підписки', () => {
       unsubscribeToken: `unsub-first-${Date.now()}`,
     });
 
-    await page.goto(`/api/unsubscribe/${sub.unsubscribeToken}`);
+    await page.goto(`/unsubscribe/${sub.unsubscribeToken}`);
 
     await expect(page.locator('h1')).toContainText('Відписку підтверджено');
 

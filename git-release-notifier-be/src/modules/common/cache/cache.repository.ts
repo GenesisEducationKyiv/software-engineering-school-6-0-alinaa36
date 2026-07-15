@@ -11,10 +11,8 @@ export class RedisCacheRepository implements ICacheRepository {
 
     try {
       return JSON.parse(raw) as T;
-    } catch {
-      Logger.error(
-        `[Redis] Failed to parse cached value for key "${key}". Treating as cache miss.`,
-      );
+    } catch (err) {
+      Logger.warn({ err, key }, '[Redis] Failed to parse cached value, treating as cache miss');
 
       return null;
     }

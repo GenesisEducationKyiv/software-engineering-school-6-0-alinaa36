@@ -1,4 +1,8 @@
-import type { ScanJobPayload } from '../../../workers/scanner/types/scanner.type';
+export interface ScanJobPayload {
+  repos: string[];
+  lockKey: string;
+  lockToken: string;
+}
 
 export interface IScanQueueSession {
   send(payload: ScanJobPayload): boolean;
