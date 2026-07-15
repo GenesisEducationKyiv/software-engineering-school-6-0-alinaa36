@@ -1,0 +1,173 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: git-release-notifier-be/Dockerfile
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env.prod
+    labels:
+      logging: 'app'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: on-failure
+
+  worker:
+    build:
+      context: ..
+      dockerfile: git-release-notifier-be/Dockerfile
+    command: npm run start:worker
+    env_file:
+      - .env.prod
+    labels:
+      logging: 'app'
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: notification-service/Dockerfile
+    env_file:
+      - ../notification-service/.env.prod
+    ports:
+      - '9101:9101'
+    labels:
+      logging: 'app'
+    depends_on:
+      - rabbitmq
+      - redis
+    restart: on-failure
+    stop_grace_period: 15s
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - '5449:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=github_notifier
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d github_notifier']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  db-test:
+    image: postgres:15-alpine
+    ports:
+      - '5450:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=github_notifier_test
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - '5673:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - '9200:9200'
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -s -f http://localhost:9200/_cat/health || exit 1']
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: always
+
+  kibana:
+    image: kibana:8.13.0
+    ports:
+      - '5601:5601'
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
+
+  filebeat:
+    image: elastic/filebeat:8.13.0
+    user: root
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: always
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - '3002:3000'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: always
+
+volumes:
+  postgres_data:
+  es_data:
+  prometheus_data:
+  grafana_data:

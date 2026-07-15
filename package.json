@@ -1,0 +1,18 @@
+{
+  "name": "git-release-notifier-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo: git-release-notifier monolith + notification-service + shared contracts",
+  "workspaces": [
+    "packages/*",
+    "git-release-notifier-be",
+    "notification-service"
+  ],
+  "scripts": {
+    "build:contracts": "npm run build -w @grn/contracts",
+    "build": "npm run build -w @grn/contracts && npm run build -w git-release-notifier-be && npm run build -w notification-service",
+    "type:check": "npm run type:check --workspaces --if-present",
+    "test:unit": "npm run test:unit --workspaces --if-present"
+  },
+  "license": "ISC"
+}

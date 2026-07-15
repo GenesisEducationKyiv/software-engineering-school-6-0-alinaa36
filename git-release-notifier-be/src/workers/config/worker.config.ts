@@ -1,0 +1,11 @@
+export const WorkerConfig = {
+  MAX_RETRIES: 3,
+  NACK_RETRY_DELAY_MS: 5_000,
+
+  RATE_LIMIT_DELAY_MS: 1_000,
+
+  RECONNECT_DELAY_MS: 5_000,
+
+  BATCH_SIZE: 50,
+  REPO_CONCURRENCY: 5,
+} as const;
